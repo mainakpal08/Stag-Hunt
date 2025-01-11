@@ -20,6 +20,12 @@ import flask
 import gevent
 import yaml
 from cached_property import cached_property
+
+# isort: off
+from . import gevent_patch  # noqa
+
+# isort: on
+
 from dallinger import db
 from dallinger.compat import unicode
 from dallinger.config import get_config
@@ -517,9 +523,13 @@ class Gridworld(object):
         }
 
         if include_walls:
-            grid_data["walls"] = [w.serialize() for w in self.wall_locations.values()]
+            grid_data["walls"] = [
+                w.serialize() for w in list(self.wall_locations.values())
+            ]
         if include_items:
-            grid_data["items"] = [f.serialize() for f in self.item_locations.values()]
+            grid_data["items"] = [
+                f.serialize() for f in list(self.item_locations.values())
+            ]
 
         return grid_data
 
@@ -1084,7 +1094,13 @@ def serve_grid():
 
 class Game(object):
     def __init__(
-        self, network_id, item_config, transition_config, player_config, game_config
+        self,
+        network_id,
+        item_config,
+        transition_config,
+        player_config,
+        game_config,
+        db_engine,
     ):
         self.network_id = network_id
         self.item_config = item_config
@@ -1101,6 +1117,7 @@ class Game(object):
         # Setup the environment for this game
         self.node_by_player_id = {}
         self.redis_conn = db.redis_conn
+        self.db_engine = db_engine
 
         # Setup the websocket channel names
         self.broadcast_channel = "griduniverse-{}".format(network_id)
@@ -1112,32 +1129,30 @@ class Game(object):
 
     @cached_property
     def socket_session(self):
-        from dallinger.db import db_url
-
-        engine = create_engine(db_url, pool_size=1000)
         session = scoped_session(
-            sessionmaker(autocommit=False, autoflush=True, bind=engine)
+            sessionmaker(autocommit=False, autoflush=True, bind=self.db_engine)
         )
         return session
 
-    @property
-    def environment(self):
+    def fetch_environment(self, session):
         # For a game that continues into multiple generations of players we may
         # need a new environment
         environment = (
-            self.socket_session.query(dallinger.nodes.Environment)
+            session.query(dallinger.nodes.Environment)
             .filter_by(network_id=self.network_id)
             .one_or_none()
         )
         if environment is None:
-            network = self.socket_session.query(dallinger.models.Network).get(
-                self.network_id
-            )
+            network = session.query(dallinger.models.Network).get(self.network_id)
             environment = dallinger.nodes.Environment(network=network)
-            self.socket_session.add(environment)
-            self.socket_session.commit()
+            session.add(environment)
+            session.commit()
 
         return environment
+
+    @property
+    def environment(self):
+        return self.fetch_environment(self.socket_session)
 
     def record_event(self, details, player_id=None):
         """Record an event in the Info table."""
@@ -1526,15 +1541,21 @@ class Game(object):
         previous_second_timestamp = self.grid.start_timestamp
         count = 0
 
+        game_session = scoped_session(
+            sessionmaker(autocommit=False, autoflush=True, bind=self.db_engine)
+        )
+
         while not self.grid.game_over:
             # Record grid state to database
             state_data = self.grid.serialize(
                 include_walls=self.grid.walls_updated,
                 include_items=self.grid.items_updated,
             )
-            state = self.environment.update(json.dumps(state_data), details=state_data)
-            self.socket_session.add(state)
-            self.socket_session.commit()
+            state = self.fetch_environment(game_session).update(
+                json.dumps(state_data), details=state_data
+            )
+            game_session.add(state)
+            game_session.commit()
             count += 1
             self.grid.walls_updated = False
             self.grid.items_updated = False
@@ -1604,7 +1625,7 @@ class Game(object):
                 self.record_event({"type": "new_round", "round": self.grid.round})
 
         self.publish({"type": "stop"})
-        self.socket_session.commit()
+        game_session.commit()
         return
 
 
@@ -1626,6 +1647,9 @@ class Griduniverse(Experiment):
             self.setup()
             self.games_by_control_channel_id = {}
             self.redis_conn = db.redis_conn
+            from dallinger.db import db_url
+
+            db_engine = create_engine(db_url, pool_size=1000)
             for network in self.networks():
                 game = Game(
                     network_id=network.id,
@@ -1633,6 +1657,7 @@ class Griduniverse(Experiment):
                     transition_config=self.transition_config,
                     player_config=self.player_config,
                     game_config=self.config.as_dict(),
+                    db_engine=db_engine,
                 )
                 self.games_by_control_channel_id[game.control_channel] = game
 
