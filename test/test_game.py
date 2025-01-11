@@ -13,6 +13,7 @@ class TestGameLoops(object):
     def loop_game_3x(self, game):
         game.grid.start_timestamp = time.time()
         game.socket_session = mock.Mock()
+        game.game_session = mock.Mock()
         game.publish = mock.Mock()
 
         def count_down(counter):
@@ -122,9 +123,9 @@ class TestGameLoops(object):
         game = loop_game_3x
         game.game_loop()
 
-        assert game.socket_session.add.call_count == 3
+        assert game.game_session.add.call_count == 3
         # Session commited once per loop and again at end
-        assert game.socket_session.commit.call_count == 4
+        assert game.game_session.commit.call_count == 4
 
     def test_loop_resets_state(self, loop_game_3x):
         # Wall and item state unset, item count reset during loop

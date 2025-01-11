@@ -1134,6 +1134,13 @@ class Game(object):
         )
         return session
 
+    @cached_property
+    def game_session(self):
+        session = scoped_session(
+            sessionmaker(autocommit=False, autoflush=True, bind=self.db_engine)
+        )
+        return session
+
     def fetch_environment(self, session):
         # For a game that continues into multiple generations of players we may
         # need a new environment
@@ -1541,9 +1548,7 @@ class Game(object):
         previous_second_timestamp = self.grid.start_timestamp
         count = 0
 
-        game_session = scoped_session(
-            sessionmaker(autocommit=False, autoflush=True, bind=self.db_engine)
-        )
+        game_session = self.game_session
 
         while not self.grid.game_over:
             # Record grid state to database
