@@ -6,11 +6,12 @@ psycogreen.gevent.patch_psycopg()  # noqa
 # isort: on
 
 # This definitely belongs in dallinger.data
-import psycopg2  # noqa
 from contextlib import contextmanager  # noqa
+
+import psycopg2  # noqa
 from dallinger import data  # noqa
 
-is_patched = getattr(data, "_patched", False)
+is_patched = getattr(data, "_paused_thread", False)
 
 
 @contextmanager
@@ -30,5 +31,5 @@ if not is_patched:
         with _paused_thread():
             return _orig_copy_db_to_csv(dsn, path, scrub_pii)
 
-    data._patched = True
+    data._paused_thread = _paused_thread
     data.copy_db_to_csv = _patched_copy_db_to_csv
