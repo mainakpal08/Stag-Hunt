@@ -2,7 +2,7 @@
 mode = live
 auto_recruit = false
 recruiter = multi
-recruiters = bots: 1, cli: 2
+recruiters = bots: 1, cli: 1
 network = FullyConnected
 block_size = 25
 columns = 15
@@ -13,7 +13,7 @@ use_identicons = true
 background_animation = false
 
 [Game Parameters]
-max_participants = 3
+max_participants = 2
 num_rounds = 1
 goal_items = 3
 num_cook = 2

@@ -26,19 +26,13 @@ from .maze_utils import find_path_astar, maze_to_graph, positions_to_maze
 logger = logging.getLogger("griduniverse")
 logger.setLevel(logging.INFO) 
 
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
 class BaseGridUniverseBot(BotBase):
     """A base class for GridUniverse bots that implements experiment
     specific helper functions and runs under Selenium"""
 
-    MEAN_KEY_INTERVAL = 1  #: The average number of seconds between key presses
-    MAX_KEY_INTERVAL = 10  #: The maximum number of seconds between key presses
-    END_BUFFER_SECONDS = 30  #: Seconds to wait after expected game end before giving up
+    MEAN_KEY_INTERVAL = 0.5  #: The average number of seconds between key presses
+    MAX_KEY_INTERVAL = 10   #: The maximum number of seconds between key presses
+    END_BUFFER_SECONDS = 60  #: Seconds to wait after expected game end before giving up
 
     def complete_questionnaire(self):
         """Complete the standard debriefing form randomly."""
@@ -94,13 +88,12 @@ class BaseGridUniverseBot(BotBase):
         return str(self.get_js_variable("ego"))
 
     @property
-    def food_positions(self):
-        """Return a list of food coordinates"""
+    def animal_positions(self):
+        """Return a list of animal types and their coordinates"""
         try:
             return [
-                tuple(item["position"])
-                for item in self.state["food"]
-                if item["maturity"] > 0.5
+                (item["item_id"], tuple(item["position"]))
+                for item in self.state["items"]
             ]
         except (AttributeError, TypeError, KeyError):
             return []
@@ -473,10 +466,14 @@ class RandomBot(HighPerformanceBaseGridUniverseBot):
         return {"id": self.id, "type": "bot"}
 
     def get_next_key(self):
-        """Randomly press one of Up, Down, Left, Right, space, r, b or y"""
+        """Randomly press one of Up, Down, Left, Right, space"""
 
+        logger.info(f"My position is {self.my_position}")
+
+        logger.info(f"All players positions: {self.player_positions}")
+        logger.info(f"Animal positions: {self.animal_positions}")
         chosen_key = random.choice(self.VALID_KEYS)
-        logger.info(f"Chosen key for random bot = {repr(chosen_key)} (type={type(chosen_key)})")
+        logger.info(f"Chosen key for random bot = {repr(chosen_key)}")
         return chosen_key
 
 
