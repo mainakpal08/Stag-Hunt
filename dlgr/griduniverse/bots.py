@@ -5,6 +5,7 @@ import json
 import logging
 import operator
 import random
+import uuid
 
 import gevent
 from dallinger.bots import BotBase, HighPerformanceBotBase
@@ -23,7 +24,13 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from .maze_utils import find_path_astar, maze_to_graph, positions_to_maze
 
 logger = logging.getLogger("griduniverse")
+logger.setLevel(logging.INFO) 
 
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 class BaseGridUniverseBot(BotBase):
     """A base class for GridUniverse bots that implements experiment
@@ -454,11 +461,23 @@ class RandomBot(HighPerformanceBaseGridUniverseBot):
     """A bot that plays griduniverse randomly"""
 
     #: The Selenium keys that this bot will choose between
-    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE, "r", "b", "y"]
+    # VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE, "r", "b", "y"]
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Inicializa o ID do bot
+        self.id = str(uuid.uuid4())
+    
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
 
     def get_next_key(self):
         """Randomly press one of Up, Down, Left, Right, space, r, b or y"""
-        return random.choice(self.VALID_KEYS)
+
+        chosen_key = random.choice(self.VALID_KEYS)
+        logger.info(f"Chosen key for random bot = {repr(chosen_key)} (type={type(chosen_key)})")
+        return chosen_key
 
 
 class FoodSeekingBot(HighPerformanceBaseGridUniverseBot):
@@ -542,9 +561,19 @@ class AdvantageSeekingBot(HighPerformanceBaseGridUniverseBot):
     target for another player.
     """
 
+    # def __init__(self, *args, **kwargs):
+    #     super(AdvantageSeekingBot, self).__init__(*args, **kwargs)
+    #     self.target_coordinates = (None, None)
+
+
     def __init__(self, *args, **kwargs):
         super(AdvantageSeekingBot, self).__init__(*args, **kwargs)
-        self.target_coordinates = (None, None)
+        # Initializes bot ID
+        self.id = str(uuid.uuid4())
+        logger.info("AdvantageSeekingBot ID" + self.id)
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
 
     def get_player_spread(self, positions=None):
         """Mean distance between players.
@@ -666,7 +695,11 @@ class AdvantageSeekingBot(HighPerformanceBaseGridUniverseBot):
             # cause the average spread of players to increase, fall back to
             # the behavior of the RandomBot
             valid_keys = RandomBot.VALID_KEYS
-        return random.choice(valid_keys)
+        chosen_key = random.choice(valid_keys)
+        logger.info("Chosen key = " + chosen_key)
+        return chosen_key
+
+#class ProbabilityBot(HighPerformanceBaseGridUniverseBot):
 
 
 def Bot(*args, **kwargs):
@@ -677,6 +710,7 @@ def Bot(*args, **kwargs):
 
     config = get_config()
     bot_implementation = config.get("bot_policy", "RandomBot")
+    # bot_implementation = config.get("bot_policy", "AdvantageSeekingBot")
     bot_class = globals().get(bot_implementation, None)
     if bot_class and issubclass(bot_class, BotBase):
         return bot_class(*args, **kwargs)

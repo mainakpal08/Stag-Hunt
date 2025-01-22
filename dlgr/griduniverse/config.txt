@@ -1,7 +1,8 @@
 [Experiment Parameters]
 mode = live
 auto_recruit = false
-recruiter = hotair
+recruiter = multi
+recruiters = bots: 1, cli: 2
 network = FullyConnected
 block_size = 25
 columns = 15
@@ -12,8 +13,8 @@ use_identicons = true
 background_animation = false
 
 [Game Parameters]
-max_participants = 2
-num_rounds = 5
+max_participants = 3
+num_rounds = 1
 goal_items = 3
 num_cook = 2
 player_overlap = true
