@@ -293,11 +293,15 @@ class BaseGridUniverseBot(BotBase):
         distances = {}
         for player_id, position in self.player_positions.items():
             player_distances = {}
-            for j, food in enumerate(self.food_positions):
-                player_distances[j], _ = self.distance(position, food)
+            for j, animal in enumerate(self.animal_positions):
+                animal_position = animal[1]  # `animal` é ('hare', (x, y))
+                
+                # Log para depuração
+                logger.debug(f"Player ID: {player_id}, Player position: {position}, Animal position: {animal_position}")
+
+                player_distances[j], _ = self.distance(position, animal_position)
             distances[player_id] = player_distances
         return distances
-
 
 class HighPerformanceBaseGridUniverseBot(HighPerformanceBotBase, BaseGridUniverseBot):
     """A parent class for GridUniverse bots that causes them to be run as a HighPerformanceBot,
@@ -472,6 +476,7 @@ class RandomBot(HighPerformanceBaseGridUniverseBot):
 
         logger.info(f"All players positions: {self.player_positions}")
         logger.info(f"Animal positions: {self.animal_positions}")
+        logger.info(f"Distances: {self.distances()}")
         chosen_key = random.choice(self.VALID_KEYS)
         logger.info(f"Chosen key for random bot = {repr(chosen_key)}")
         return chosen_key
