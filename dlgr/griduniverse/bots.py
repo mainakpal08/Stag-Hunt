@@ -3,6 +3,7 @@ import datetime
 import itertools
 import json
 import logging
+import math
 import operator
 import random
 import uuid
@@ -458,7 +459,6 @@ class RandomBot(HighPerformanceBaseGridUniverseBot):
     """A bot that plays griduniverse randomly"""
 
     #: The Selenium keys that this bot will choose between
-    # VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE, "r", "b", "y"]
     VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
 
     def __init__(self, *args, **kwargs):
@@ -701,8 +701,131 @@ class AdvantageSeekingBot(HighPerformanceBaseGridUniverseBot):
         logger.info("Chosen key = " + chosen_key)
         return chosen_key
 
-#class ProbabilityBot(HighPerformanceBaseGridUniverseBot):
+class ProbabilisticStagHuntBot(HighPerformanceBaseGridUniverseBot):
+    """A bot that plays griduniverse with a strategy to aid in stag capture."""
 
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.player_probabilities = {}  # Tracks probabilities of other players going for the stag
+        self.alpha = 0.8  # Parameter for probability update
+        self.threshold = 0.75  # Threshold for deciding to go for the stag
+        logger.info("Initializing bot...")
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def initialize_probabilities(self):
+        """Initializes probabilities for all players."""
+        if not self.player_positions:
+            logger.error("Player positions not initialized; cannot initialize probabilities.")
+            return
+        for player_id in self.player_positions:
+            if player_id != self.id:  # Exclude the bot itself
+                self.player_probabilities[player_id] = 0.5  # Start with equal probability
+        logger.info(f"Initialized probabilities: {self.player_probabilities}")
+
+    def update_probabilities(self):
+        """Updates probabilities based on player movements toward the stag or hares."""
+        if not self.animal_positions:
+            logger.warning("No animal positions found; skipping probability update.")
+            return
+        if not any(animal[0] == "stag" for animal in self.animal_positions):
+            logger.warning("No stags found; skipping probability update.")
+            return
+
+        for player_id, position in self.player_positions.items():
+            if player_id == self.id:
+                continue  # Skip the bot itself
+
+            if player_id not in self.player_probabilities:
+                self.player_probabilities[player_id] = 0.5
+
+            previous_position = self.previous_player_positions.get(player_id, position)
+
+            # Calculate displacements
+            displacement_to_stag = min(
+                self.get_distance(position, stag[1]) - self.get_distance(previous_position, stag[1])
+                for stag in self.animal_positions if stag[0] == "stag"
+            )
+            displacement_to_hares = sum(
+                self.get_distance(position, hare[1]) - self.get_distance(previous_position, hare[1])
+                for hare in self.animal_positions if hare[0] == "hare"
+            ) / max(1, len([a for a in self.animal_positions if a[0] == "hare"]))
+
+            # Calculate rewards
+            reward_stag = -displacement_to_stag
+            reward_no_stag = -displacement_to_hares
+
+            # Update probabilities using Bayesian approach
+            likelihood_stag = math.exp(self.alpha * reward_stag)
+            likelihood_no_stag = math.exp(self.alpha * reward_no_stag)
+
+            prior_stag = self.player_probabilities[player_id]
+            prior_no_stag = 1 - prior_stag
+
+            posterior_stag = prior_stag * likelihood_stag
+            posterior_no_stag = prior_no_stag * likelihood_no_stag
+
+            # Normalize
+            normalization_constant = posterior_stag + posterior_no_stag
+            self.player_probabilities[player_id] = posterior_stag / normalization_constant
+        logger.info(f"Updated probabilities: {self.player_probabilities}")
+
+    def decide_action(self):
+        """Decides whether to go for the stag based on updated probabilities."""
+        for player_id, probability in self.player_probabilities.items():
+            if probability > self.threshold:
+                logger.info(f"Deciding to go for stag due to player {player_id} with probability {probability}.")
+                return True  # Go for the stag if any player exceeds the threshold
+        return False
+
+    def get_next_key(self):
+        """Decides the next action based on the strategy."""
+
+        if not self.player_positions or not self.my_position or not self.animal_positions:
+            logger.warning("Missing data (player positions, my position, or animal positions); moving randomly.")
+            return random.choice(self.VALID_KEYS)
+
+        logger.info(f"My position is {self.my_position}")
+        logger.info(f"All players positions: {self.player_positions}")
+        logger.info(f"Animal positions: {self.animal_positions}")
+
+        # Update probabilities only if there is available data
+        if self.player_positions and self.animal_positions:
+            self.update_probabilities()
+
+        if self.decide_action():
+            stag_positions = [pos[1] for pos in self.animal_positions if pos[0] == "stag"]
+            if stag_positions:
+                closest_stag = min(stag_positions, key=lambda stag: self.get_distance(self.my_position, stag))
+                next_move = self.move_towards(self.my_position, closest_stag)
+                logger.info(f"Going for stag at {closest_stag}, moving: {next_move}")
+                return next_move
+            else:
+                logger.warning("No stags found; moving randomly.")
+
+        chosen_key = random.choice(self.VALID_KEYS)
+        logger.info(f"No decision to go for stag, moving randomly: {repr(chosen_key)}")
+        return chosen_key
+
+    def get_distance(self, pos1, pos2):
+        """Calculates the Manhattan distance between two positions."""
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
+    def move_towards(self, current_position, target_position):
+        """Determines the direction to move toward the target."""
+        if target_position[0] > current_position[0]:
+            return Keys.DOWN
+        elif target_position[0] < current_position[0]:
+            return Keys.UP
+        elif target_position[1] > current_position[1]:
+            return Keys.RIGHT
+        elif target_position[1] < current_position[1]:
+            return Keys.LEFT
+        return Keys.SPACE
 
 def Bot(*args, **kwargs):
     """Pick a bot implementation based on a configuration parameter.
@@ -711,8 +834,7 @@ def Bot(*args, **kwargs):
     """
 
     config = get_config()
-    bot_implementation = config.get("bot_policy", "RandomBot")
-    # bot_implementation = config.get("bot_policy", "AdvantageSeekingBot")
+    bot_implementation = config.get("bot_policy", "ProbabilisticStagHuntBot")
     bot_class = globals().get(bot_implementation, None)
     if bot_class and issubclass(bot_class, BotBase):
         return bot_class(*args, **kwargs)
