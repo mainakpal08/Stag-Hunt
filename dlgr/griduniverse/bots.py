@@ -31,8 +31,8 @@ class BaseGridUniverseBot(BotBase):
     """A base class for GridUniverse bots that implements experiment
     specific helper functions and runs under Selenium"""
 
-    MEAN_KEY_INTERVAL = 0.5  #: The average number of seconds between key presses
-    MAX_KEY_INTERVAL = 10   #: The maximum number of seconds between key presses
+    MEAN_KEY_INTERVAL = 2  #: The average number of seconds between key presses
+    MAX_KEY_INTERVAL = 15   #: The maximum number of seconds between key presses
     END_BUFFER_SECONDS = 60  #: Seconds to wait after expected game end before giving up
 
     def complete_questionnaire(self):
@@ -798,14 +798,14 @@ class ProbabilisticStagHuntBot(HighPerformanceBaseGridUniverseBot):
             self.update_probabilities()
 
         if self.decide_action():
-            stag_positions = [pos[1] for pos in self.animal_positions if pos[0] == "stag"]
-            if stag_positions:
-                closest_stag = min(stag_positions, key=lambda stag: self.get_distance(self.my_position, stag))
-                next_move = self.move_towards(self.my_position, closest_stag)
-                logger.info(f"Going for stag at {closest_stag}, moving: {next_move}")
+            stag_position = next((pos[1] for pos in self.animal_positions if pos[0] == "stag"), None)
+            if stag_position:
+                next_move = self.move_towards(self.my_position, stag_position)
+                logger.info(f"Going for stag at {stag_position}, moving: {next_move}")
                 return next_move
             else:
-                logger.warning("No stags found; moving randomly.")
+                logger.warning("No stag found; moving randomly.")
+
 
         chosen_key = random.choice(self.VALID_KEYS)
         logger.info(f"No decision to go for stag, moving randomly: {repr(chosen_key)}")
@@ -835,6 +835,7 @@ def Bot(*args, **kwargs):
 
     config = get_config()
     bot_implementation = config.get("bot_policy", "ProbabilisticStagHuntBot")
+    # bot_implementation = config.get("bot_policy", "RandomBot")
     bot_class = globals().get(bot_implementation, None)
     if bot_class and issubclass(bot_class, BotBase):
         return bot_class(*args, **kwargs)
