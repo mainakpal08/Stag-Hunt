@@ -827,6 +827,80 @@ class ProbabilisticStagHuntBot(HighPerformanceBaseGridUniverseBot):
             return Keys.LEFT
         return Keys.SPACE
 
+class StalkerBot(HighPerformanceBaseGridUniverseBot):
+    """A bot that follows the closest player"""
+
+    #: The Selenium keys that this bot will choose between
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+    
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def get_furthest_player_position(self):
+        """Find the furthest player's position."""
+        my_position = self.my_position  # The bot's current position
+        furthest_player = None
+        furthest_distance = -float("inf")  # Usar "-inf" para comparar a maior distância
+
+        logger.info(f"My position: {my_position}")
+        logger.info(f"Player positions: {self.player_positions}")
+
+        for player_id, position in self.player_positions.items():
+            if str(player_id) == self.id:  # Comparar IDs como strings para ignorar o bot
+                logger.info(f"Skipping self (Bot ID: {self.id}) at position {position}")
+                continue  # Skip the bot itself
+
+            # Calculate Manhattan distance
+            distance = abs(my_position[0] - position[0]) + abs(my_position[1] - position[1])
+            logger.info(f"Checking player {player_id} at position {position} with distance {distance}")
+
+            if distance > furthest_distance:  # Verificar maior distância
+                furthest_distance = distance
+                furthest_player = position
+                logger.info(f"New furthest player: {player_id} at position {position} with distance {distance}")
+
+        logger.info(f"Furthest player determined: {furthest_player}")
+        return furthest_player
+
+
+
+
+    def get_next_key(self):
+        """Move towards the furthest player."""
+        furthest_player = self.get_furthest_player_position()
+
+        if not furthest_player:
+            logger.info("No players found, staying idle or picking a random key.")
+            return random.choice(self.VALID_KEYS)
+
+        my_position = self.my_position
+
+        logger.info(f"My position: {my_position}")
+        logger.info(f"Furthest player position: {furthest_player}")
+
+        # Determine the direction to move to get closer to the furthest player
+        if furthest_player[0] > my_position[0]:
+            chosen_key = Keys.DOWN  # Move down
+        elif furthest_player[0] < my_position[0]:
+            chosen_key = Keys.UP  # Move up
+        elif furthest_player[1] > my_position[1]:
+            chosen_key = Keys.RIGHT  # Move right
+        elif furthest_player[1] < my_position[1]:
+            chosen_key = Keys.LEFT  # Move left
+        else:
+            chosen_key = Keys.SPACE  # No movement needed
+
+        logger.info(f"Chosen key for bot = {repr(chosen_key)}")
+        return chosen_key
+
+
+
+
+
 def Bot(*args, **kwargs):
     """Pick a bot implementation based on a configuration parameter.
 
@@ -834,7 +908,7 @@ def Bot(*args, **kwargs):
     """
 
     config = get_config()
-    bot_implementation = config.get("bot_policy", "ProbabilisticStagHuntBot")
+    bot_implementation = config.get("bot_policy", "StalkerBot")
     # bot_implementation = config.get("bot_policy", "RandomBot")
     bot_class = globals().get(bot_implementation, None)
     if bot_class and issubclass(bot_class, BotBase):
