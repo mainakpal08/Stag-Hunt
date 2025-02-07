@@ -202,6 +202,8 @@ class Gridworld(object):
         self.padding = kwargs.get("padding", 1)
         self.chat_visibility_threshold = kwargs.get("chat_visibility_threshold", 0.4)
         self.spatial_chat = kwargs.get("spatial_chat", False)
+
+        # EDITED
         self.visibility = kwargs.get("visibility", 40)
         self.visibility_ramp_time = kwargs.get("visibility_ramp_time", 4)
         self.background_animation = kwargs.get("background_animation", True)

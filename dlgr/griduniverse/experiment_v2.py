@@ -206,8 +206,6 @@ class Gridworld(object):
         self.padding = kwargs.get("padding", 1)
         self.chat_visibility_threshold = kwargs.get("chat_visibility_threshold", 0.4)
         self.spatial_chat = kwargs.get("spatial_chat", False)
-
-        # EDITED
         self.visibility = kwargs.get("visibility", 40)
         self.visibility_ramp_time = kwargs.get("visibility_ramp_time", 4)
         self.background_animation = kwargs.get("background_animation", True)
@@ -653,6 +651,48 @@ class Gridworld(object):
 
         return grid_data
 
+    # def deserialize(self, state):
+    #     if self.rows != state["rows"] or self.columns != state["columns"]:
+    #         raise ValueError(
+    #             "State has wrong grid size ({}x{}, configured as {}x{})".format(
+    #                 state["rows"],
+    #                 state["columns"],
+    #                 self.rows,
+    #                 self.columns,
+    #             )
+    #         )
+    #     self.round = state["round"]
+    #     # @@@ can't set donation_active because it's a property
+    #     # self.donation_active = state['donation_active']
+
+    #     self.players = {}
+    #     for player_state in state["players"]:
+    #         player_state["color_name"] = player_state.pop("color", None)
+    #         player = Player(
+    #             pseudonym_locale=self.pseudonyms_locale,
+    #             pseudonym_gender=self.pseudonyms_gender,
+    #             grid=self,
+    #             **player_state,
+    #         )
+    #         self.players[player.id] = player
+
+    #     if "walls" in state:
+    #         self.wall_locations = {}
+    #         for wall_state in state["walls"]:
+    #             if isinstance(wall_state, list):
+    #                 wall_state = {"position": wall_state}
+    #             wall = Wall(**wall_state)
+    #             self.wall_locations[tuple(wall.position)] = wall
+
+    #     if "items" in state:
+    #         self.item_locations = {}
+    #         for item_state in state["items"]:
+    #             # TODO verify this works at some point!
+    #             item_props = self.item_config[item_state["item_id"]]
+    #             obj = Item(item_config=item_props, **item_state)
+    #             self.item_locations[tuple(obj.position)] = obj
+
+
     def deserialize(self, state):
         if self.rows != state["rows"] or self.columns != state["columns"]:
             raise ValueError(
@@ -664,18 +704,31 @@ class Gridworld(object):
                 )
             )
         self.round = state["round"]
-        # @@@ can't set donation_active because it's a property
-        # self.donation_active = state['donation_active']
 
         self.players = {}
         for player_state in state["players"]:
             player_state["color_name"] = player_state.pop("color", None)
-            player = Player(
-                pseudonym_locale=self.pseudonyms_locale,
-                pseudonym_gender=self.pseudonyms_gender,
-                grid=self,
-                **player_state,
-            )
+            recruiter_id = player_state.get("recruiter_id", "")
+            # Determine if this player is a bot
+            is_bot = recruiter_id == 'bots'
+            if is_bot:
+                # Create a bot instance
+                #from .bots import Bot as BotClass
+                player = Bot()
+                # player = BotClass(
+                #     pseudonym_locale=self.pseudonyms_locale,
+                #     pseudonym_gender=self.pseudonyms_gender,
+                #     grid=self,
+                #     **player_state,
+                # )
+            else:
+                # Create a regular Player instance
+                player = Player(
+                    pseudonym_locale=self.pseudonyms_locale,
+                    pseudonym_gender=self.pseudonyms_gender,
+                    grid=self,
+                    **player_state,
+                )
             self.players[player.id] = player
 
         if "walls" in state:
@@ -693,6 +746,9 @@ class Gridworld(object):
                 item_props = self.item_config[item_state["item_id"]]
                 obj = Item(item_config=item_props, **item_state)
                 self.item_locations[tuple(obj.position)] = obj
+
+
+
 
     def instructions(self):
         color_costs = ""
@@ -926,26 +982,90 @@ class Gridworld(object):
                 else:
                     break
 
-    def spawn_player(self, id=None, **kwargs):
-        """Spawn a player."""
-        player = Player(
-            id=id,
-            position=self._find_empty_position(player=True),
-            num_possible_colors=self.num_colors,
-            motion_speed_limit=self.motion_speed_limit,
-            motion_cost=self.motion_cost,
-            score=self.initial_score,
-            motion_tremble_rate=self.motion_tremble_rate,
-            pseudonym_locale=self.pseudonyms_locale,
-            pseudonym_gender=self.pseudonyms_gender,
-            grid=self,
-            identity_visible=(
-                not self.identity_signaling or self.identity_starts_visible
-            ),
-            **kwargs,
-        )
+    # def spawn_player(self, id=None, **kwargs):
+    #     """Spawn a player."""
+    #     player = Player(
+    #         id=id,
+    #         position=self._find_empty_position(player=True),
+    #         num_possible_colors=self.num_colors,
+    #         motion_speed_limit=self.motion_speed_limit,
+    #         motion_cost=self.motion_cost,
+    #         score=self.initial_score,
+    #         motion_tremble_rate=self.motion_tremble_rate,
+    #         pseudonym_locale=self.pseudonyms_locale,
+    #         pseudonym_gender=self.pseudonyms_gender,
+    #         grid=self,
+    #         identity_visible=(
+    #             not self.identity_signaling or self.identity_starts_visible
+    #         ),
+    #         **kwargs,
+    #     )
 
-        #LINE EDITED BLANK -
+    #     #LINE EDITED BLANK -
+    #     item_props = self.item_config["blank"]
+
+    #     new_item = Item(
+    #         id=(len(self.item_locations) + len(self.items_consumed)),
+    #         item_config=item_props,
+    #     )
+
+    #     player.current_item = new_item
+
+    #     #LINE EDITED BLANK -
+
+
+
+    #     self.players[id] = player
+    #     self._start_if_ready()
+    #     return player
+
+
+    def spawn_player(self, id=None, participant=None, **kwargs):
+        """Spawn a player."""
+        # Determine if the participant is a bot
+        is_bot = participant.recruiter_id == 'bots' if participant else False
+
+        # Use the Bot class from bots.py if participant is a bot
+        if is_bot:
+            #from .bots import Bot as BotClass
+            # player = Bot(
+            #     id=id,
+            #     position=self._find_empty_position(player=True),
+            #     num_possible_colors=self.num_colors,
+            #     motion_speed_limit=self.motion_speed_limit,
+            #     motion_cost=self.motion_cost,
+            #     score=self.initial_score,
+            #     motion_tremble_rate=self.motion_tremble_rate,
+            #     pseudonym_locale=self.pseudonyms_locale,
+            #     pseudonym_gender=self.pseudonyms_gender,
+            #     grid=self,
+            #     identity_visible=(
+            #         not self.identity_signaling or self.identity_starts_visible
+            #     ),
+            #     participant=participant,  # Pass the participant to the bot
+            #     **kwargs,
+            # )
+            player = Bot()
+        else:
+            # Create a regular Player instance for human participants
+            player = Player(
+                id=id,
+                position=self._find_empty_position(player=True),
+                num_possible_colors=self.num_colors,
+                motion_speed_limit=self.motion_speed_limit,
+                motion_cost=self.motion_cost,
+                score=self.initial_score,
+                motion_tremble_rate=self.motion_tremble_rate,
+                pseudonym_locale=self.pseudonyms_locale,
+                pseudonym_gender=self.pseudonyms_gender,
+                grid=self,
+                identity_visible=(
+                    not self.identity_signaling or self.identity_starts_visible
+                ),
+                **kwargs,
+            )
+
+        # Initialize player's current item
         item_props = self.item_config["blank"]
 
         new_item = Item(
@@ -955,13 +1075,12 @@ class Gridworld(object):
 
         player.current_item = new_item
 
-        #LINE EDITED BLANK -
-
-
-
         self.players[id] = player
         self._start_if_ready()
         return player
+
+
+
 
     def _find_empty_position(self, item_id=None, player=False):
         """Select an empty cell, using the configured probability distribution."""
@@ -1323,13 +1442,20 @@ class Griduniverse(Experiment):
     def configure(self):
         super(Griduniverse, self).configure()
 
-        self.num_participants = self.config.get("max_participants", 3)
-        self.num_recruits = self.config.get("num_recruits", 3)
-        self.quorum = self.num_participants
-        self.initial_recruitment_size = self.config.get(
-            "num_recruits", self.num_participants
-        )
+        # self.num_participants = self.config.get("max_participants", 3)
+        # self.num_recruits = self.config.get("num_recruits", 3)
+        # self.quorum = self.num_participants
+        # self.initial_recruitment_size = self.config.get(
+        #     "num_recruits", self.num_participants
+        # )
+        # self.network_factory = self.config.get("network", "FullyConnected")
+        # MP; MODIFIED
+        self.num_participants = self.config.get("max_participants", 3)  # Total participants (humans + bots)
+        self.num_recruits = self.config.get("num_recruits", 2)  # Number of human recruits
+        self.quorum = self.num_recruits  # Wait for 2 human participants
+        self.initial_recruitment_size = self.num_recruits  # 2
         self.network_factory = self.config.get("network", "FullyConnected")
+
 
         game_config_file = os.path.join(os.path.dirname(__file__), GAME_CONFIG_FILE)
         with open(game_config_file, "r") as game_config_stream:
@@ -1412,17 +1538,26 @@ class Griduniverse(Experiment):
         class_ = getattr(dallinger.networks, self.network_factory)
         return class_(max_size=self.num_participants + 1)
 
+    # def create_node(self, participant, network):
+    #     try:
+    #         # Line Edited - replaced status
+    #         if participant.status == "replaced":
+    #             participant.status = "working"
+    #         return dallinger.models.Node(network=network, participant=participant)
+    #     finally:
+    #         if not self.networks(full=False):
+    #             # If there are no spaces left in our networks we can close
+    #             # recruitment, to alleviate problems of over-recruitment
+    #             self.recruiter().close_recruitment()
+
     def create_node(self, participant, network):
-        try:
-            # Line Edited - replaced status
-            if participant.status == "replaced":
-                participant.status = "working"
-            return dallinger.models.Node(network=network, participant=participant)
-        finally:
-            if not self.networks(full=False):
-                # If there are no spaces left in our networks we can close
-                # recruitment, to alleviate problems of over-recruitment
-                self.recruiter().close_recruitment()
+        if participant.status == "replaced":
+            participant.status = "working"
+        node = dallinger.models.Node(network=network, participant=participant)
+        self.session.add(node)
+        self.session.commit()
+        return node
+
 
     def setup(self):
         """Setup the networks."""
@@ -1518,6 +1653,29 @@ class Griduniverse(Experiment):
                 participant_data["entry_information"] = entry_information
             return participant_data
     '''
+
+    def create_participant(
+        self,
+        worker_id,
+        hit_id,
+        assignment_id,
+        mode,
+        recruiter_name=None,
+        fingerprint_hash=None,
+        entry_information=None,
+    ):
+        participant = self.participant_constructor(
+            recruiter_id=recruiter_name,
+            worker_id=worker_id,
+            assignment_id=assignment_id,
+            hit_id=hit_id,
+            mode=mode,
+            fingerprint_hash=fingerprint_hash,
+            entry_information=entry_information,
+        )
+        self.session.add(participant)
+        return participant
+
 
     '''
     def create_participant(
@@ -1677,10 +1835,48 @@ class Griduniverse(Experiment):
         else:
             return None
 
+    # def handle_connect(self, msg):
+    #     player_id = msg["player_id"]
+    #     if self.config.get("replay", False):
+    #         # Force all participants to be specatators
+    #         msg["player_id"] = "spectator"
+    #         if not self.grid.start_timestamp:
+    #             self.grid.start_timestamp = time.time()
+    #     if player_id == "spectator":
+    #         logger.info("A spectator has connected.")
+    #         return
+
+    #     logger.info("Client {} has connected.".format(player_id))
+    #     client_count = len(self.grid.players)
+    #     logger.info("Grid num players: {}".format(self.grid.num_players))
+    #     if client_count < self.grid.num_players:
+    #         participant = self.session.query(dallinger.models.Participant).get(
+    #             player_id
+    #         )
+    #         network = self.get_network_for_participant(participant)
+    #         if network:
+    #             logger.info("Found an open network. Adding participant node...")
+    #             node = self.create_node(participant, network)
+    #             self.node_by_player_id[player_id] = node.id
+    #             self.session.add(node)
+    #             self.session.commit()
+    #             logger.info("Spawning player on the grid...")
+    #             # We use the current node id modulo the number of colours
+    #             # to pick the user's colour. This ensures that players are
+    #             # allocated to colours uniformly.
+    #             self.grid.spawn_player(
+    #                 id=player_id,
+    #                 color_name=self.grid.limited_player_color_names[
+    #                     node.id % self.grid.num_colors
+    #                 ],
+    #                 recruiter_id=participant.recruiter_id,
+    #             )
+    #         else:
+    #             logger.info("No free network found for player {}".format(player_id))
+
     def handle_connect(self, msg):
         player_id = msg["player_id"]
         if self.config.get("replay", False):
-            # Force all participants to be specatators
             msg["player_id"] = "spectator"
             if not self.grid.start_timestamp:
                 self.grid.start_timestamp = time.time()
@@ -1689,12 +1885,39 @@ class Griduniverse(Experiment):
             return
 
         logger.info("Client {} has connected.".format(player_id))
+
+        participant = None
+
+        # Try to find participant by worker_id (for bots)
+        participant = self.session.query(dallinger.models.Participant).filter_by(
+            worker_id=player_id
+        ).first()
+
+        if participant is None:
+            # Try to find participant by assignment_id
+            participant = self.session.query(dallinger.models.Participant).filter_by(
+                assignment_id=player_id
+            ).first()
+
+        if participant is None:
+            try:
+                # Try to interpret player_id as integer participant.id (for humans)
+                participant_id = int(player_id)
+                participant = self.session.query(dallinger.models.Participant).get(participant_id)
+            except (ValueError, TypeError):
+                logger.warning("Invalid player_id: {}".format(player_id))
+                return
+
+        if participant is None:
+            logger.warning("Participant not found for player_id {}".format(player_id))
+            return
+
+        logger.info("Participant found: ID={}, worker_id={}, assignment_id={}, recruiter_id={}".format(
+            participant.id, participant.worker_id, participant.assignment_id, participant.recruiter_id))
+
         client_count = len(self.grid.players)
         logger.info("Grid num players: {}".format(self.grid.num_players))
         if client_count < self.grid.num_players:
-            participant = self.session.query(dallinger.models.Participant).get(
-                player_id
-            )
             network = self.get_network_for_participant(participant)
             if network:
                 logger.info("Found an open network. Adding participant node...")
@@ -1703,11 +1926,9 @@ class Griduniverse(Experiment):
                 self.session.add(node)
                 self.session.commit()
                 logger.info("Spawning player on the grid...")
-                # We use the current node id modulo the number of colours
-                # to pick the user's colour. This ensures that players are
-                # allocated to colours uniformly.
                 self.grid.spawn_player(
                     id=player_id,
+                    participant=participant,
                     color_name=self.grid.limited_player_color_names[
                         node.id % self.grid.num_colors
                     ],
@@ -1715,6 +1936,9 @@ class Griduniverse(Experiment):
                 )
             else:
                 logger.info("No free network found for player {}".format(player_id))
+        else:
+            logger.info("Maximum number of players reached.")
+
 
     def handle_disconnect(self, msg):
         logger.info("Client {} has disconnected.".format(msg["player_id"]))
@@ -2541,16 +2765,27 @@ class Griduniverse(Experiment):
             if id_matches:
                 return id_matches[0]
 
+    # def is_complete(self):
+    #     """Don't consider the experiment finished until all initial
+    #     recruits have completed the experiment."""
+    #     finished_count = (
+    #         self.session.query(dallinger.models.Participant)
+    #         .filter(dallinger.models.Participant.status.in_(["approved", "rejected"]))
+    #         .with_entities(func.count(dallinger.models.Participant.id))
+    #         .scalar()
+    #     )
+
+    #     return finished_count >= self.initial_recruitment_size
+
     def is_complete(self):
-        """Don't consider the experiment finished until all initial
-        recruits have completed the experiment."""
+        """Don't consider the experiment finished until all initial recruits have completed the experiment."""
         finished_count = (
             self.session.query(dallinger.models.Participant)
             .filter(dallinger.models.Participant.status.in_(["approved", "rejected"]))
             .with_entities(func.count(dallinger.models.Participant.id))
             .scalar()
         )
+        return finished_count >= self.num_recruits  # Use num_recruits instead of initial_recruitment_size
 
-        return finished_count >= self.initial_recruitment_size
 
 

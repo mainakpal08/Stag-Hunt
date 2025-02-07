@@ -9,10 +9,9 @@ columns = 50
 rows = 50
 window_rows = 50
 window_columns = 50
-use_identicons = true
-background_animation = true
 visibility = 5
-bot_policy = ProbabilisticBot
+use_identicons = true
+background_animation = false
 
 [Game Parameters]
 max_participants = 2
@@ -24,6 +23,9 @@ walls_density = 0
 cook_time = 15
 time_per_round = 2
 game_over_cond = time
+others_visible = true
+bot_policy = ProbabilisticBot
+
 
 [Docker]
 [docker_image_base_name = ghcr.io/lucaslinzmeier/dallinger-griduniverse/griduniverse] 

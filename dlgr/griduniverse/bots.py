@@ -841,6 +841,9 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
     def decide_action(self):
         """Decides whether to go for the stag based on updated probabilities."""
+        logger.info("-------------------------------------------------------------------")
+        logger.info(f"Bot State: {self.state}")
+        logger.info("-------------------------------------------------------------------")
         for player_id, probability in self.player_probabilities.items():
             if probability[0] > self.threshold:
                 logger.info(f"Deciding to go for stag due to player {player_id} with probability {probability[0]}.")
@@ -966,9 +969,7 @@ def Bot(*args, **kwargs):
     """
 
     config = get_config()
-    # bot_implementation = config.get("bot_policy", "StalkerBot")
     bot_implementation = config.get("bot_policy", "ProbabilisticBot")
-    # bot_implementation = config.get("bot_policy", "RandomBot")
     bot_class = globals().get(bot_implementation, None)
     if bot_class and issubclass(bot_class, BotBase):
         return bot_class(*args, **kwargs)
