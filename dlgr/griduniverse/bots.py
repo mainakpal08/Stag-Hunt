@@ -33,7 +33,7 @@ class BaseGridUniverseBot(BotBase):
 
     MEAN_KEY_INTERVAL = 2 #Theerage number of seconds between key presses
     MAX_KEY_INTERVAL = 15   #: The maximum number of seconds between key presses
-    END_BUFFER_SECONDS = 60  #: Seconds to wait after expected game end before giving up
+    END_BUFFER_SECONDS = 100  #: Seconds to wait after expected game end before giving up
 
     def complete_questionnaire(self):
         """Complete the standard debriefing form randomly."""
@@ -710,7 +710,7 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         super().__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
         self.player_probabilities = {}  # Tracks probabilities of other players going for the stag
-        self.alpha = 0.005  # Parameter for probability update
+        self.alpha = 0.2  # Parameter for probability update
         self.threshold = 0.9  # Threshold for deciding to go for the stag
         self.previous_player_positions = {}
         self.initialized_probabilities = False
@@ -738,7 +738,7 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         for player_id, position in self.player_positions.items():
             if player_id == 1:  # Assuming ID 1 is always the bot, skip it
                 logger.info(f"Skipping self (Bot ID: {player_id}) at position {position}")
-                continue  # Skip the bot itself
+                continue  
 
             # Initialize the probability only for the other player
             self.player_probabilities[player_id] = [0.5, 0.5]
@@ -778,54 +778,55 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
                 logger.info("Bot skipped")
                 continue
 
-            # Get previous position for the player
             previous_position = self.previous_player_positions.get(player_id)
-            if previous_position:
-                dist_p1_stag_t1 = self.manhattan_distance(position, stag_position)
-                dist_p1_hare1_t1 = self.manhattan_distance(position, hare_positions[0])
-                dist_p1_hare2_t1 = self.manhattan_distance(position, hare_positions[1])
-                
-                dist_p1_stag_t0 = self.manhattan_distance(previous_position, stag_position)
-                dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
-                dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
 
-                reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) * dist_p1_stag_t1  # Positive if moving closer to stag
-                #reward_no_stag = -(dist_p1_hare1_t1 - dist_p1_hare1_t0 + dist_p1_hare2_t1 - dist_p1_hare2_t0) / 2
-                reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0) * dist_p1_hare1_t1, (dist_p1_hare2_t1 - dist_p1_hare2_t0) * dist_p1_hare2_t1)
+            if previous_position is None:
+                self.previous_player_positions[player_id] = position
+                logger.info(f"Initializing previous position for Player {player_id}. Skipping update.")
+                continue
 
-                exp_stag = reward_stag #math.exp(self.alpha * reward_stag)
-                exp_nostag = reward_no_stag #math.exp(self.alpha * reward_no_stag)
+            if previous_position == position:
+                logger.info(f"Player {player_id} has not moved. Skipping probability update.")
+                continue
 
-                lhood_denom = max(exp_stag + exp_nostag, 0.05)
+            dist_p1_stag_t1 = self.manhattan_distance(position, stag_position)
+            dist_p1_hare1_t1 = self.manhattan_distance(position, hare_positions[0])
+            dist_p1_hare2_t1 = self.manhattan_distance(position, hare_positions[1])
 
-                lhood_stag = exp_stag / lhood_denom
-                lhood_nostag = exp_nostag / lhood_denom
+            dist_p1_stag_t0 = self.manhattan_distance(previous_position, stag_position)
+            dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
+            dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
 
-                prior_stag = self.player_probabilities[player_id][0] * lhood_stag
-                prior_nostag = self.player_probabilities[player_id][1] * lhood_nostag
+            reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) #* dist_p1_stag_t1  
+            # reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0) * dist_p1_hare1_t1, 
+            #                     (dist_p1_hare2_t1 - dist_p1_hare2_t0) * dist_p1_hare2_t1)
 
-                priors = [prior_stag, prior_nostag]
-                self.player_probabilities[player_id] = self.normalize(priors)
+            reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0), (dist_p1_hare2_t1 - dist_p1_hare2_t0))
 
-                # reward = reward_stag
-                # exp_term = math.exp(self.alpha * reward)
-                # updated_prob = exp_term / (exp_term + math.exp(self.alpha * -reward))
+            exp_stag = math.exp(self.alpha * reward_stag)
+            exp_nostag = math.exp(self.alpha * reward_no_stag)
 
-                # # Store the updated probability for the player
-                # self.player_probabilities[player_id] = updated_prob
+            lhood_denom = max(exp_stag + exp_nostag, 0.05)
+            lhood_stag = exp_stag / lhood_denom
+            lhood_nostag = exp_nostag / lhood_denom
 
+            prior_stag = self.player_probabilities[player_id][0] * lhood_stag
+            prior_nostag = self.player_probabilities[player_id][1] * lhood_nostag
 
+            self.player_probabilities[player_id] = self.normalize([prior_stag, prior_nostag])
 
-            # Store the current position as the previous position for the next update
+            # Atualiza posição anterior do jogador
             self.previous_player_positions[player_id] = position
 
-        # Log the updated probabilities
-        self.iterations = self.iterations + 1
-
+        # Log das probabilidades atualizadas
+        self.iterations += 1
         logger.info("-------------------------------------------------------------")
         logger.info(f"Iteration: {self.iterations}")
         logger.info(f"Updated probabilities: {self.player_probabilities}")
         logger.info("-------------------------------------------------------------")
+
+
+
 
     def normalize(self, arr):
         min_val, max_val = min(arr), max(arr)
