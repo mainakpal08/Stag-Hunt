@@ -711,11 +711,12 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.id = str(uuid.uuid4())
         self.player_probabilities = {}  # Tracks probabilities of other players going for the stag
         self.alpha = 0.005  # Parameter for probability update
-        self.threshold = 0.75  # Threshold for deciding to go for the stag
+        self.threshold = 0.9  # Threshold for deciding to go for the stag
         self.previous_player_positions = {}
         self.initialized_probabilities = False
         self.is_going_for_stag = False
         self.all_probabilites = []
+        self.iterations = 0
         logger.info("Initializing bot...")
         
     
@@ -788,9 +789,9 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
                 dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
                 dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
 
-                reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0)  # Positive if moving closer to stag
+                reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) * dist_p1_stag_t1  # Positive if moving closer to stag
                 #reward_no_stag = -(dist_p1_hare1_t1 - dist_p1_hare1_t0 + dist_p1_hare2_t1 - dist_p1_hare2_t0) / 2
-                reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0), (dist_p1_hare2_t1 - dist_p1_hare2_t0))
+                reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0) * dist_p1_hare1_t1, (dist_p1_hare2_t1 - dist_p1_hare2_t0) * dist_p1_hare2_t1)
 
                 exp_stag = reward_stag #math.exp(self.alpha * reward_stag)
                 exp_nostag = reward_no_stag #math.exp(self.alpha * reward_no_stag)
@@ -819,13 +820,18 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             self.previous_player_positions[player_id] = position
 
         # Log the updated probabilities
+        self.iterations = self.iterations + 1
+
+        logger.info("-------------------------------------------------------------")
+        logger.info(f"Iteration: {self.iterations}")
         logger.info(f"Updated probabilities: {self.player_probabilities}")
+        logger.info("-------------------------------------------------------------")
 
     def normalize(self, arr):
         min_val, max_val = min(arr), max(arr)
         if min_val == max_val:
             return [0.5, 0.5]
-        return [min(max(((x-min_val)/ (max_val-min_val)),0.1), 0.9) for x in arr]
+        return [min(max(((x-min_val)/ (max_val-min_val)),0.1), 0.99) for x in arr]
 
     def move_towards(self, current_position, target_position):
         """Determines the direction to move toward the target."""
@@ -841,9 +847,9 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
     def decide_action(self):
         """Decides whether to go for the stag based on updated probabilities."""
-        logger.info("-------------------------------------------------------------------")
-        logger.info(f"Bot State: {self.state}")
-        logger.info("-------------------------------------------------------------------")
+        # logger.info("-------------------------------------------------------------------")
+        # logger.info(f"Bot State: {self.state}")
+        # logger.info("-------------------------------------------------------------------")
         for player_id, probability in self.player_probabilities.items():
             if probability[0] > self.threshold:
                 logger.info(f"Deciding to go for stag due to player {player_id} with probability {probability[0]}.")
@@ -862,7 +868,7 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
                 stag_position = next((pos[1] for pos in self.animal_positions if pos[0] == "stag"), None)
                 if stag_position:
                     next_move = self.move_towards(self.my_position, stag_position)
-                    logger.info(f"Going for stag at {stag_position}, moving: {next_move}")
+                    logger.info(f"Going for stag at {stag_position}, moving: {repr(next_move)}")
                     self.is_going_for_stag = True
                     return next_move
                 else:
@@ -871,7 +877,7 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             stag_position = next((pos[1] for pos in self.animal_positions if pos[0] == "stag"), None)
             if stag_position:
                 next_move = self.move_towards(self.my_position, stag_position)
-                logger.info(f"Continuing towards stag at {stag_position}, moving: {next_move}")
+                logger.info(f"Continuing towards stag at {stag_position}, moving: {repr(next_move)}")
                 return next_move
         
         logger.info("No action decided, pressing SPACE.")
