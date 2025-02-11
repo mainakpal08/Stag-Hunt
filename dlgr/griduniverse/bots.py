@@ -798,11 +798,20 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
             dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
 
-            reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) #* 0.8
-            # reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0) * dist_p1_hare1_t1, 
-            #                      (dist_p1_hare2_t1 - dist_p1_hare2_t0) * dist_p1_hare2_t1)
+            delta_stag = dist_p1_stag_t1 - dist_p1_stag_t0
+            delta_hare1 = dist_p1_hare1_t1 - dist_p1_hare1_t0
+            delta_hare2 = dist_p1_hare2_t1 - dist_p1_hare2_t0
 
-            reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0), (dist_p1_hare2_t1 - dist_p1_hare2_t0)) #* 0.8
+            total_distance = dist_p1_stag_t1 + dist_p1_hare1_t1 + dist_p1_hare2_t1
+            stag_percentage = total_distance / dist_p1_stag_t1
+            hare1_percentage = total_distance / dist_p1_hare1_t1
+            hare2_percentage = total_distance / dist_p1_hare2_t1
+
+
+
+            reward_stag = -(delta_stag * stag_percentage)
+
+            reward_no_stag = - min((delta_hare1 * hare1_percentage), (delta_hare2 * hare2_percentage))
 
             logger.info(f"Reward stag = {reward_stag}, Reward no stag = {reward_no_stag}")
 

@@ -6,22 +6,27 @@ def normalize(arr):
         return [0.5, 0.5]
     return [arr[0] / total, arr[1] / total]
 
-alpha = 0.8
+alpha = 0.1
 player_probabilities = [0.5, 0.5]  
 iterations = 0
 
-hare1_distances = [5, 4, 3, 2, 2]  
+hare1_distances = [10, 9, 8, 7, 6]
 hare2_distances = [10, 11, 12, 13, 14]  
-stag_distances = [6, 5, 4, 5, 4] 
+stag_distances = [5, 4, 3, 2, 1]  
 
 for i in range(1, len(hare1_distances)):
 
     delta_hare1 = hare1_distances[i] - hare1_distances[i-1]
     delta_hare2 = hare2_distances[i] - hare2_distances[i-1]
     delta_stag = stag_distances[i] - stag_distances[i-1]
+    total_distance = hare1_distances[i] + hare2_distances[i] + stag_distances[i]
 
-    reward_stag = -delta_stag 
-    reward_no_stag = -min(delta_hare1, delta_hare2) 
+    stag_percentage = total_distance / stag_distances[i]
+    hare1_percentage = total_distance / hare1_distances[i]
+    hare2_percentage = total_distance / hare2_distances[i] 
+
+    reward_stag = -delta_stag * stag_percentage
+    reward_no_stag = -min(delta_hare1 * hare1_percentage, delta_hare2 * hare2_percentage) 
 
     exp_stag = math.exp(alpha * reward_stag)
     exp_nostag = math.exp(alpha * reward_no_stag)
