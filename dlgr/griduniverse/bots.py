@@ -798,11 +798,13 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
             dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
 
-            reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) * 0.8
+            reward_stag = -(dist_p1_stag_t1 - dist_p1_stag_t0) #* 0.8
             # reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0) * dist_p1_hare1_t1, 
             #                      (dist_p1_hare2_t1 - dist_p1_hare2_t0) * dist_p1_hare2_t1)
 
-            reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0), (dist_p1_hare2_t1 - dist_p1_hare2_t0)) * 0.8
+            reward_no_stag = - min((dist_p1_hare1_t1 - dist_p1_hare1_t0), (dist_p1_hare2_t1 - dist_p1_hare2_t0)) #* 0.8
+
+            logger.info(f"Reward stag = {reward_stag}, Reward no stag = {reward_no_stag}")
 
             exp_stag = math.exp(self.alpha * reward_stag)
             exp_nostag = math.exp(self.alpha * reward_no_stag)
