@@ -891,6 +891,141 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         return Keys.SPACE
 
 
+class BayesianStagHunterBot(HighPerformanceBaseGridUniverseBot):
+    
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.beta = 2.5  # Rationality parameter
+        self.threshold = 0.5  # Belief threshold
+        
+        # Prior beliefs P(Intentions)
+        self.beliefs = {
+            'stag': 1/3,
+            'hare1': 1/3,
+            'hare2': 1/3
+        }
+        
+        # Track human's previous position
+        self.prev_human_pos = None
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def get_human_position(self):
+        """Identify human position from player positions"""
+        self.bot_id = self.get_player_id()
+        for player_id, pos in self.player_positions.items():
+            if player_id != self.bot_id:
+                return pos
+        return None
+    
+    def get_animal_positions(self):
+        stag_pos = None
+        hare_pos = []
+        for animal_id, pos in self.animal_positions:
+            if str(animal_id).lower() == 'stag':
+                stag_pos = pos
+            elif str(animal_id).lower() == 'hare':
+                hare_pos.append(pos)
+        return stag_pos, hare_pos
+    
+    def normalize(self, arr, epsilon=0.05):
+        """Normalizes an array so that its elements sum to 1 and are clamped to [epsilon, 1-epsilon]."""
+        total = sum(arr)
+        if total == 0:
+            arr = [0.5, 0.5]
+        else:
+            arr = [x / total for x in arr]
+        # Clamp each element so that none is lower than epsilon or higher than 1-epsilon
+        arr = [max(min(x, 1 - epsilon), epsilon) for x in arr]
+        # Renormalize to ensure the sum is 1
+        total = sum(arr)
+        return [x / total for x in arr]
+        
+
+    def update_beliefs(self, stag_pos, hare_pos, human_action, epsilon=0.05):
+        likelihoods = {}
+        for intention in self.beliefs:
+            target_pos = stag_pos if intention == 'stag' else (
+                hare_pos[0] if intention == 'hare1' else hare_pos[1])
+            old_dist = self.manhattan_distance(self.prev_human_pos, target_pos)
+            new_dist = self.manhattan_distance(human_action, target_pos)
+            delta_d = old_dist - new_dist
+            likelihoods[intention] = math.exp(self.beta * delta_d)
+
+        total = sum(likelihoods.values())
+        for intention in likelihoods:
+            likelihoods[intention] /= total
+
+        for intention in self.beliefs:
+            self.beliefs[intention] *= likelihoods[intention]
+
+        # Normalize beliefs
+        total_belief = sum(self.beliefs.values())
+        for intention in self.beliefs:
+            self.beliefs[intention] = self.beliefs[intention] / total_belief
+
+        # Clamp each belief and renormalize
+        for intention in self.beliefs:
+            self.beliefs[intention] = max(min(self.beliefs[intention], 1 - epsilon), epsilon)
+        total_belief = sum(self.beliefs.values())
+        for intention in self.beliefs:
+            self.beliefs[intention] /= total_belief
+
+    def get_direction_to_target(self, target_pos):
+        """Determine best direction to move towards target"""
+        my_x, my_y = self.my_position
+        t_x, t_y = target_pos
+
+        if t_x > my_x:
+            return Keys.DOWN
+        elif t_x < my_x:
+            return Keys.UP
+        elif t_y > my_y:
+            return Keys.RIGHT
+        elif t_y < my_y:
+            return Keys.LEFT
+        return Keys.SPACE
+
+    def get_next_key(self):
+        """Main decision function using Bayesian inference"""
+        human_pos = self.get_human_position()
+        stag_pos, hare_pos = self.get_animal_positions()
+        
+        # Update beliefs if human has moved
+        if human_pos and self.prev_human_pos and human_pos != self.prev_human_pos:
+            self.update_beliefs(stag_pos, hare_pos, human_pos)
+            logger.info(f"Previous human position: {self.prev_human_pos}")
+            logger.info(f"Human moved to: {human_pos}")
+            logger.info(f"Stag position: {stag_pos}, Hare positions: {hare_pos}")
+            logger.info(f"Beliefs: {self.beliefs}")
+
+        
+        # Store current human position for next iteration
+        self.prev_human_pos = human_pos
+        
+        # Decision logic
+        if self.beliefs['stag'] >= self.threshold:
+            # Move towards stag
+            if self.my_position == stag_pos:
+                logger.info("Stag reached, pressing SPACE.")
+                return Keys.SPACE
+            logger.info("Moving towards stag.")
+            return self.get_direction_to_target(stag_pos)
+        else:
+            # Move towards least likely hare
+            hare_target = min(['hare1', 'hare2'], key=lambda x: self.beliefs[x])
+            hare_2go = hare_pos[0] if hare_target == 'hare1' \
+                      else hare_pos[1]
+            
+            if self.my_position == hare_2go:
+                logger.info("Hare reached, pressing SPACE.")
+                return Keys.SPACE
+            logger.info(f"Moving towards {hare_target}.")
+            return self.get_direction_to_target(hare_2go)
 
     
 
