@@ -12,7 +12,7 @@ window_columns = 25
 use_identicons = true
 background_animation = true
 visibility = 25
-bot_policy = BayesianStagHunterBot
+bot_policy = ProbabilisticBot
 
 [Game Parameters]
 max_participants = 2
