@@ -911,6 +911,138 @@ class ProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
         return Keys.SPACE
 
+class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
+    """" A bot that uses probability to perform actions. """
+
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.player_probabilities = {}
+        self.alpha = 0.05  
+        self.threshold = 0.9
+        self.initialized_probabilities = False
+        self.iterations = 0
+        self.previous_player_positions = {}
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+    
+    def initialize_probabilities(self):
+        """Initializes the probabilities for all players going for each animal."""
+        if not self.player_positions or not self.animal_positions:
+            logger.error("Player or animal positions not initialized; cannot initialize probabilities.")
+            return
+
+        total_animals = len(self.animal_positions)
+        logger.info("Len animal positions: " + str(total_animals))
+        
+        if total_animals == 0:
+            logger.error("No animals found; cannot initialize probabilities.")
+            return
+
+        initial_prob = 1 / total_animals
+
+        for player_id in self.player_positions:
+            if player_id == 1:
+                continue
+            
+            self.player_probabilities[player_id] = []
+
+            for _ in range(total_animals):
+                self.player_probabilities[player_id].append(initial_prob)
+
+        self.initialized_probabilities = True
+        logger.info(f"Initialized probabilities: {self.player_probabilities}")
+    
+    def update_probabilities(self):
+        """Updates probabilities for each animal based on player movements."""
+        if not self.player_positions or not self.animal_positions:
+            logger.error("Player or animal positions not initialized; cannot update probabilities.")
+            return
+        
+        for player_id, position in self.player_positions.items():
+            if player_id == 1:
+                continue
+
+            previous_position = self.previous_player_positions.get(player_id)
+
+            logger.info(f"Previous positions: {self.previous_player_positions}")
+            logger.info(f"Checking Player {player_id}, previous position: {previous_position}")
+            if previous_position is None:
+                self.previous_player_positions[player_id] = position
+                logger.info(f"Initialized previous position for Player {player_id}. Skipping update.")
+                continue
+                        
+            movement_deltas = {}
+            for animal_id, animal_position in self.animal_positions:
+                dist_t1 = self.manhattan_distance(position, animal_position)
+                dist_t0 = self.manhattan_distance(previous_position, animal_position)
+                movement_deltas[animal_id] = dist_t1 - dist_t0
+            logger.info("2.....................")
+            logger.info(f"movement deltas: {movement_deltas}")
+
+            total_distance = sum(abs(delta) for delta in movement_deltas.values())
+            rewards = {animal_id: -movement_deltas[animal_id] * (total_distance / dist)
+                       if dist != 0 else -movement_deltas[animal_id]
+                       for animal_id, dist in movement_deltas.items()}
+
+            likelihoods = {animal_id: math.exp(self.alpha * reward) for animal_id, reward in rewards.items()}
+            likelihood_denom = sum(likelihoods.values())
+
+            if likelihood_denom == 0:
+                likelihoods = {animal_id: 1 / len(likelihoods) for animal_id in likelihoods}
+            else:
+                likelihoods = {animal_id: value / likelihood_denom for animal_id, value in likelihoods.items()}
+
+            self.player_probabilities[player_id] = self.normalize(
+                {animal_id: self.player_probabilities[player_id][animal_id] * likelihoods[animal_id]
+                 for animal_id in likelihoods}
+            )
+
+            self.previous_player_positions[player_id] = position
+        
+        self.iterations += 1
+        logger.info(f"Updated probabilities: {self.player_probabilities}")
+    
+    def normalize(self, prob_dict, epsilon=0.02):
+        total = sum(prob_dict.values())
+        if total == 0:
+            return {k: 1 / len(prob_dict) for k in prob_dict}
+        
+        prob_dict = {k: v / total for k, v in prob_dict.items()}
+        prob_dict = {k: max(min(v, 1 - epsilon), epsilon) for k, v in prob_dict.items()}
+        total = sum(prob_dict.values())
+        return {k: v / total for k, v in prob_dict.items()}
+    
+    def decide_action(self):
+        """Decides which animal to pursue based on the highest probability."""
+        max_prob = 0
+        best_target = None
+        
+        for player_id, probabilities in self.player_probabilities.items():
+            for animal_id, prob in probabilities.items():
+                if prob > max_prob:
+                    max_prob = prob
+                    best_target = animal_id
+        
+        return best_target
+    
+    def get_next_key(self):
+        """Decides the next action based on probabilities."""
+        if not self.initialized_probabilities:
+            self.initialize_probabilities()
+        
+        if self.player_positions and self.animal_positions:
+            self.update_probabilities()
+            best_target = self.decide_action()
+            
+            target_position = next((pos for aid, pos in self.animal_positions if aid == best_target), None)
+            if target_position:
+                return self.move_towards(self.my_position, target_position)
+        
+        return Keys.SPACE
 
 class BayesianStagHunterBot(HighPerformanceBaseGridUniverseBot):
     
