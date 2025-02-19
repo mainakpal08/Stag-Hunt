@@ -956,7 +956,22 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         logger.info(f"Initialized probabilities: {self.player_probabilities}")
     
     def update_probabilities(self):
-        """Updates probabilities for each animal based on player movements."""
+        """
+        This function updates the probabilities for each player based on their movement relative to the animals.
+
+        Process:
+        1. Compute the distance between the player and each animal at two time steps: t0 (previous position) and t1 (current position).
+        2. Determine the change in distance for each animal and store these values in a movement delta list.
+        3. Maintain a list of current distances and calculate the total sum of distances to all animals.
+        4. Compute the reward for each animal:
+        - Calculate a distance factor as the ratio of the total current distance to the individual animal's distance.
+        - Compute the reward as the negative product of the movement delta and the distance factor.
+        - Apply an exponential transformation to the reward, weighted by a constant alpha.
+        - Compute the likelihood denominator as the sum of all exponentials.
+        5. Using these values, determine the likelihood for each animal, normalize the probabilities, and update the player's probability distribution.
+        6. The implementation relies on simple lists, ensuring that probabilities align with the order of animal_positions.
+        """
+
         if not self.player_positions or not self.animal_positions:
             logger.error("Player or animal positions not initialized; cannot update probabilities.")
             return
@@ -1017,7 +1032,6 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             
         logger.info(f"Updated probabilities: {self.player_probabilities}")
 
-    
     def normalize(self, prob_list, epsilon=0.02):
         total = sum(prob_list)
         if total == 0:
@@ -1030,9 +1044,22 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
     
     def decide_action(self):
-        """Decides which animal to pursue based on the highest probability across players."""
+        """
+        This function determines which animal the bot should pursue based on player probabilities.
+
+        Steps:
+        1. Extract the list of animals from self.animal_positions, maintaining the order in which they appear.
+        2. Each player (excluding the bot) has a probability list corresponding to the animals' order.
+        - Example: {2: [0.1, 0.1, 0.2, 0.2, 0.3, 0.1], 3: [0.1, ...]}.
+        - The bot's ID is 1 and should be skipped.
+        3. Iterate through player_probabilities to find the highest probability for each player.
+        4. Determine the bot's target based on the following conditions:
+        - If any player has their highest probability for a stag, the bot should target that specific stag.
+        - If one player favors a stag while another favors a hare, the bot prioritizes the stag.
+        - If both players favor a stag, the bot pursues the closest stag.
+        - If both players favor a hare, the bot targets the closest available hare, ensuring it is not already being pursued by the other players.
+        """
         
-        # Create a reference list of animals in the order they appear in self.animal_positions
         animal_types = [animal_id for animal_id, _ in self.animal_positions]  
         best_targets = {} 
         
@@ -1042,7 +1069,7 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             
             max_prob = max(probabilities)
             best_index = probabilities.index(max_prob)
-            best_targets[player_id] = (animal_types[best_index], best_index)  # (animal type, index)
+            best_targets[player_id] = (animal_types[best_index], best_index)
             logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
 
         # Check if any player has a stag as their best option
