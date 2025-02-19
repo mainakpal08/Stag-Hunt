@@ -977,65 +977,102 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             total_distance = 0
 
             # 2025-02-18 18:53:20,569 Animal positions: [('hare', (0, 17)), ('hare', (4, 22)), ('stag', (6, 3))]
+            #             dist_p1_stag_t1 = self.manhattan_distance(position, stag_position)
+            # dist_p1_hare1_t1 = self.manhattan_distance(position, hare_positions[0])
+            # dist_p1_hare2_t1 = self.manhattan_distance(position, hare_positions[1])
 
-            for animal_id, animal_position in self.animal_positions:
+            # dist_p1_stag_t0 = self.manhattan_distance(previous_position, stag_position)
+            # dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
+            # dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
+
+            # delta_stag = dist_p1_stag_t1 - dist_p1_stag_t0
+            # delta_hare1 = dist_p1_hare1_t1 - dist_p1_hare1_t0
+            # delta_hare2 = dist_p1_hare2_t1 - dist_p1_hare2_t0
+
+            # total_distance = dist_p1_stag_t1 + dist_p1_hare1_t1 + dist_p1_hare2_t1
+            # stag_percentage = total_distance / dist_p1_stag_t1 if dist_p1_stag_t1 != 0 else total_distance
+            # hare1_percentage = total_distance / dist_p1_hare1_t1 if dist_p1_hare1_t1 != 0 else total_distance
+            # hare2_percentage = total_distance / dist_p1_hare2_t1  if dist_p1_hare2_t1 != 0 else total_distance
+
+            # reward_stag = - (delta_stag * stag_percentage)
+            # reward_hare1 = - (delta_hare1 * hare1_percentage)
+            # reward_hare2 = - (delta_hare2 * hare2_percentage)
+
+            # logger.info(f"Reward stag = {reward_stag}, Reward hare 1 = {reward_hare1}, Reward hare 2 = {reward_hare2}")
+
+            # exp_stag = math.exp(self.alpha * reward_stag)
+            # exp_hare1 = math.exp(self.alpha * reward_hare1)
+            # exp_hare2 = math.exp(self.alpha * reward_hare2)
+
+            # lhood_denom = exp_stag + exp_hare1 + exp_hare2 
+
+            # if lhood_denom == 0:
+            #     logger.error("Likelihood denominator is zero! Assigning equal probabilities.")
+            #     lhood_stag = lhood_hare1 = lhood_hare2 = 1/3
+            # else:
+            #     lhood_stag = exp_stag / lhood_denom
+            #     lhood_hare1 = exp_hare1 / lhood_denom
+            #     lhood_hare2 = exp_hare2 / lhood_denom
+            
+            # prior_stag = self.player_probabilities[player_id][0] * lhood_stag
+            # prior_hare1 = self.player_probabilities[player_id][1] * lhood_hare1
+            # prior_hare2 = self.player_probabilities[player_id][2] * lhood_hare2
+
+
+            # self.player_probabilities[player_id] = self.normalize([prior_stag, prior_hare1, prior_hare2])
+            # self.previous_player_positions[player_id] = position
+
+            current_distance = []
+
+            for _, animal_position in self.animal_positions:
                 dist_t1 = self.manhattan_distance(position, animal_position)
                 dist_t0 = self.manhattan_distance(previous_position, animal_position)
                 movement_deltas.append(dist_t1 - dist_t0)
+                current_distance.append(dist_t1)
                 total_distance += dist_t1
 
             logger.info(f"Movement deltas: {movement_deltas}")
 
-            rewards = {}
-            for idx, (animal_id, _) in enumerate(self.animal_positions):
-                dist = movement_deltas[idx]  
-                if dist != 0:
-                    rewards[animal_id] = -dist * (total_distance / dist)
-                else:
-                    rewards[animal_id] = -dist
+            rewards = []
+            exponentials = []
+            lhood_denom = 0
 
-            # Calculate likelihoods
-            likelihoods = {animal_id: math.exp(self.alpha * reward) for animal_id, reward in rewards.items()}
-            likelihood_denom = sum(likelihoods.values())
+            for i in range(len(self.animal_positions)):
+                distance_factor = total_distance / current_distance[i] if current_distance[i] != 0 else total_distance
+                rewards.append(-movement_deltas[i] * distance_factor)
+                calc_exponential = math.exp(self.alpha * rewards[i])
+                exponentials.append(calc_exponential)
+                lhood_denom += calc_exponential
 
-            if likelihood_denom == 0:
-                likelihoods = {animal_id: 1 / len(likelihoods) for animal_id in likelihoods}
-            else:
-                likelihoods = {animal_id: value / likelihood_denom for animal_id, value in likelihoods.items()}
-
-            # Ensure the stag always comes first in the probabilities
-            updated_probabilities = [0] * len(self.animal_positions)
-
-            for idx, (animal_id, _) in enumerate(self.animal_positions):
-                updated_probabilities[idx] = self.player_probabilities[player_id][idx] * likelihoods.get(animal_id, 1)
-
-            # Normalize the probabilities to ensure they sum to 1
-            total_prob = sum(updated_probabilities)
-            normalized_probabilities = [prob / total_prob for prob in updated_probabilities]
-
-            # Update the probabilities list for this player
-            self.player_probabilities[player_id] = normalized_probabilities
+            logger.info(f"Rewards: {rewards}")
             
+
+            new_probabilities = []
+            for i in range(len(self.animal_positions)):
+                if lhood_denom == 0:
+                    likelihood = 1 / len(self.animal_positions)
+                else:
+                    likelihood = exponentials[i] / lhood_denom
+                    prior = self.player_probabilities[player_id][i] * likelihood
+                    new_probabilities.append(prior)
+            
+            self.player_probabilities[player_id] = self.normalize(new_probabilities)
             self.previous_player_positions[player_id] = position
             
         self.iterations += 1
         logger.info(f"Updated probabilities: {self.player_probabilities}")
 
-
-
-
-
-
     
-    def normalize(self, prob_dict, epsilon=0.02):
-        total = sum(prob_dict.values())
+    def normalize(self, prob_list, epsilon=0.02):
+        total = sum(prob_list)
         if total == 0:
-            return {k: 1 / len(prob_dict) for k in prob_dict}
+            return [1 / len(prob_list)] * len(prob_list)
         
-        prob_dict = {k: v / total for k, v in prob_dict.items()}
-        prob_dict = {k: max(min(v, 1 - epsilon), epsilon) for k, v in prob_dict.items()}
-        total = sum(prob_dict.values())
-        return {k: v / total for k, v in prob_dict.items()}
+        prob_list = [v / total for v in prob_list]
+        prob_list = [max(min(v, 1 - epsilon), epsilon) for v in prob_list]
+        total = sum(prob_list)
+        return [v / total for v in prob_list]
+
     
     def decide_action(self):
         """Decides which animal to pursue based on the highest probability."""
