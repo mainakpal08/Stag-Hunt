@@ -921,7 +921,6 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.id = str(uuid.uuid4())
         self.player_probabilities = {}
         self.alpha = 0.05  
-        self.threshold = 0.9
         self.initialized_probabilities = False
         self.iterations = 0
         self.previous_player_positions = {}
@@ -973,55 +972,12 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
                 logger.info(f"Initialized previous position ({position}) for Player {player_id}. Skipping update.")
                 continue
 
-            movement_deltas = []
-            total_distance = 0
-
-            # 2025-02-18 18:53:20,569 Animal positions: [('hare', (0, 17)), ('hare', (4, 22)), ('stag', (6, 3))]
-            #             dist_p1_stag_t1 = self.manhattan_distance(position, stag_position)
-            # dist_p1_hare1_t1 = self.manhattan_distance(position, hare_positions[0])
-            # dist_p1_hare2_t1 = self.manhattan_distance(position, hare_positions[1])
-
-            # dist_p1_stag_t0 = self.manhattan_distance(previous_position, stag_position)
-            # dist_p1_hare1_t0 = self.manhattan_distance(previous_position, hare_positions[0])
-            # dist_p1_hare2_t0 = self.manhattan_distance(previous_position, hare_positions[1])
-
-            # delta_stag = dist_p1_stag_t1 - dist_p1_stag_t0
-            # delta_hare1 = dist_p1_hare1_t1 - dist_p1_hare1_t0
-            # delta_hare2 = dist_p1_hare2_t1 - dist_p1_hare2_t0
-
-            # total_distance = dist_p1_stag_t1 + dist_p1_hare1_t1 + dist_p1_hare2_t1
-            # stag_percentage = total_distance / dist_p1_stag_t1 if dist_p1_stag_t1 != 0 else total_distance
-            # hare1_percentage = total_distance / dist_p1_hare1_t1 if dist_p1_hare1_t1 != 0 else total_distance
-            # hare2_percentage = total_distance / dist_p1_hare2_t1  if dist_p1_hare2_t1 != 0 else total_distance
-
-            # reward_stag = - (delta_stag * stag_percentage)
-            # reward_hare1 = - (delta_hare1 * hare1_percentage)
-            # reward_hare2 = - (delta_hare2 * hare2_percentage)
-
-            # logger.info(f"Reward stag = {reward_stag}, Reward hare 1 = {reward_hare1}, Reward hare 2 = {reward_hare2}")
-
-            # exp_stag = math.exp(self.alpha * reward_stag)
-            # exp_hare1 = math.exp(self.alpha * reward_hare1)
-            # exp_hare2 = math.exp(self.alpha * reward_hare2)
-
-            # lhood_denom = exp_stag + exp_hare1 + exp_hare2 
-
-            # if lhood_denom == 0:
-            #     logger.error("Likelihood denominator is zero! Assigning equal probabilities.")
-            #     lhood_stag = lhood_hare1 = lhood_hare2 = 1/3
-            # else:
-            #     lhood_stag = exp_stag / lhood_denom
-            #     lhood_hare1 = exp_hare1 / lhood_denom
-            #     lhood_hare2 = exp_hare2 / lhood_denom
+            if previous_position == position:
+                logger.info(f"Player {player_id} has not moved. Skipping probability update.")
+                continue
             
-            # prior_stag = self.player_probabilities[player_id][0] * lhood_stag
-            # prior_hare1 = self.player_probabilities[player_id][1] * lhood_hare1
-            # prior_hare2 = self.player_probabilities[player_id][2] * lhood_hare2
-
-
-            # self.player_probabilities[player_id] = self.normalize([prior_stag, prior_hare1, prior_hare2])
-            # self.previous_player_positions[player_id] = position
-
+            total_distance = 0
+            movement_deltas = []
             current_distance = []
 
             for _, animal_position in self.animal_positions:
@@ -1059,7 +1015,6 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             self.player_probabilities[player_id] = self.normalize(new_probabilities)
             self.previous_player_positions[player_id] = position
             
-        self.iterations += 1
         logger.info(f"Updated probabilities: {self.player_probabilities}")
 
     
@@ -1075,34 +1030,75 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
     
     def decide_action(self):
-        """Decides which animal to pursue based on the highest probability."""
-        max_prob = 0
-        best_target = None
+        """Decides which animal to pursue based on the highest probability across players."""
+        
+        # Create a reference list of animals in the order they appear in self.animal_positions
+        animal_types = [animal_id for animal_id, _ in self.animal_positions]  
+        best_targets = {} 
         
         for player_id, probabilities in self.player_probabilities.items():
-            for animal_id, prob in probabilities.items():
-                if prob > max_prob:
-                    max_prob = prob
-                    best_target = animal_id
+            if player_id == 1:
+                continue
+            
+            max_prob = max(probabilities)
+            best_index = probabilities.index(max_prob)
+            best_targets[player_id] = (animal_types[best_index], best_index)  # (animal type, index)
+            logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+
+        # Check if any player has a stag as their best option
+        stag_targets = [index for player, (animal, index) in best_targets.items() if animal == 'stag']
+        hare_targets = [index for player, (animal, index) in best_targets.items() if animal == 'hare']
         
-        return best_target
+        if stag_targets:  # If any player has a stag as the best target, go to the closest one
+            return min(stag_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+        
+        # Otherwise, look for the closest hare that is not already targeted by another player
+        available_hares = [idx for idx in range(len(animal_types)) if animal_types[idx] == 'hare' and idx not in hare_targets]
+        
+        if available_hares:
+            logger.info("Available hares: " + str(available_hares))
+            return min(available_hares, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+        
+        logger.info("No available hares; choosing the closest among those already targeted.")
+        # If no hares are available, choose the closest among those already targeted
+        return min(hare_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+    
+    def move_towards(self, current_position, target_position):
+        """Determines the direction to move toward the target with variation."""
+        options = []
+        
+        if target_position[0] > current_position[0]:
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
+
     
     def get_next_key(self):
         """Decides the next action based on probabilities."""
         if not self.initialized_probabilities:
             self.initialize_probabilities()
-        
-        # if self.player_positions and self.animal_positions:
-        #     self.update_probabilities()
-        #     best_target = self.decide_action()
-            
-        #     target_position = next((pos for aid, pos in self.animal_positions if aid == best_target), None)
-        #     if target_position:
-        #         return self.move_towards(self.my_position, target_position)
 
-        self.update_probabilities()
+        logger.info("-------------------------------------------------------------")
+        logger.info(f"Iteration: {self.iterations}")
         
-        return Keys.SPACE
+        self.update_probabilities()
+        best_target = self.decide_action()
+        target_position = self.animal_positions[best_target][1]
+        next_move = self.move_towards(self.my_position, target_position)
+
+        logger.info(f"Going for {best_target} at {target_position}, moving: {repr(next_move)}")
+        self.iterations += 1
+        
+        return next_move
+        
+    
+
 
 class BayesianStagHunterBot(HighPerformanceBaseGridUniverseBot):
     
