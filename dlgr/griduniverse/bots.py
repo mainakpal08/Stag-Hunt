@@ -1054,6 +1054,7 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         - The bot's ID is 1 and should be skipped.
         3. Iterate through player_probabilities to find the highest probability for each player.
         4. Determine the bot's target based on the following conditions:
+        - If all probability values are equal for all players, the bot stays still.
         - If any player has their highest probability for a stag, the bot should target that specific stag.
         - If one player favors a stag while another favors a hare, the bot prioritizes the stag.
         - If both players favor a stag, the bot pursues the closest stag.
@@ -1062,33 +1063,44 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         
         animal_types = [animal_id for animal_id, _ in self.animal_positions]  
         best_targets = {} 
-        
+        all_probs_equal = True  # Flag to check if all probabilities are equal
+
         for player_id, probabilities in self.player_probabilities.items():
             if player_id == 1:
                 continue
             
             max_prob = max(probabilities)
-            best_index = probabilities.index(max_prob)
-            best_targets[player_id] = (animal_types[best_index], best_index)
-            logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+            min_prob = min(probabilities)
+            
+            if max_prob != min_prob:  
+                all_probs_equal = False  # If at least one player has different probabilities, set flag to False
+                best_index = probabilities.index(max_prob)
+                best_targets[player_id] = (animal_types[best_index], best_index)
+                logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+
+        # If all probabilities are equal, the bot stays still
+        if all_probs_equal:
+            logger.info("All probabilities are equal; bot will stay in place.")
+            return None
 
         # Check if any player has a stag as their best option
         stag_targets = [index for player, (animal, index) in best_targets.items() if animal == 'stag']
         hare_targets = [index for player, (animal, index) in best_targets.items() if animal == 'hare']
-        
+
         if stag_targets:  # If any player has a stag as the best target, go to the closest one
             return min(stag_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
-        
+
         # Otherwise, look for the closest hare that is not already targeted by another player
         available_hares = [idx for idx in range(len(animal_types)) if animal_types[idx] == 'hare' and idx not in hare_targets]
-        
+
         if available_hares:
             logger.info("Available hares: " + str(available_hares))
             return min(available_hares, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
-        
+
         logger.info("No available hares; choosing the closest among those already targeted.")
         # If no hares are available, choose the closest among those already targeted
         return min(hare_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+
     
     def move_towards(self, current_position, target_position):
         """Determines the direction to move toward the target with variation."""
@@ -1116,6 +1128,11 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         
         self.update_probabilities()
         best_target = self.decide_action()
+
+        if best_target is None:
+            logger.info("No clear target determined; staying in place.")
+            return None
+
         target_position = self.animal_positions[best_target][1]
         next_move = self.move_towards(self.my_position, target_position)
 
@@ -1123,6 +1140,7 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.iterations += 1
         
         return next_move
+
         
     
 
