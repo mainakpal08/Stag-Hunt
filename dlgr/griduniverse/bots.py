@@ -11,6 +11,7 @@ import uuid
 import gevent
 from dallinger.bots import BotBase, HighPerformanceBotBase
 from dallinger.config import get_config
+import numpy as np
 from selenium.common.exceptions import (
     NoSuchElementException,
     StaleElementReferenceException,
@@ -1141,7 +1142,249 @@ class GeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         
         return next_move
 
+
+class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
+    """" A bot that uses probability to perform actions. """
+
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.player_probabilities = {}
+        self.alpha = 0.05  
+        self.initialized_probabilities = False
+        self.iterations = 0
+        self.previous_player_positions = {}
+
+        self.n_col = 0
+        self.n_row = 0
+        self.visibility = 0
+        self.game_config_loaded = False
+
+        self.initialized_belief = False
+        self.belief = {}
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+    
+    def load_game_config(self):
+        config = get_config()
+        self.n_col = config.get("columns")
+        self.n_row = config.get("rows")
+        self.visibility = config.get("visibility")
+        self.game_config_loaded = True
+    
+    def initialize_probabilities(self):
+        """Initializes the probabilities for all players going for each animal."""
+        if not self.player_positions or not self.animal_positions:
+            logger.error("Player or animal positions not initialized; cannot initialize probabilities.")
+            return
+
+        total_animals = len(self.animal_positions)
+        logger.info("Len animal positions: " + str(total_animals))
         
+        if total_animals == 0:
+            logger.error("No animals found; cannot initialize probabilities.")
+            return
+
+        initial_prob = 1 / total_animals
+
+        for player_id in self.player_positions:
+            if player_id == 1:
+                continue
+            
+            self.player_probabilities[player_id] = []
+
+            for _ in range(total_animals):
+                self.player_probabilities[player_id].append(initial_prob)
+
+        self.initialized_probabilities = True
+        logger.info(f"Initialized probabilities: {self.player_probabilities}")
+    
+    def update_probabilities(self):
+        """Updates probabilities for each animal based on player movements."""
+        if not self.player_positions or not self.animal_positions:
+            logger.error("Player or animal positions not initialized; cannot update probabilities.")
+            return
+
+        for player_id, position in self.player_positions.items():
+            if player_id == 1:
+                continue
+
+            previous_position = self.previous_player_positions.get(player_id)
+            
+            if previous_position is None:
+                self.previous_player_positions[player_id] = position
+                logger.info(f"Initialized previous position ({position}) for Player {player_id}. Skipping update.")
+                continue
+
+            if previous_position == position:
+                logger.info(f"Player {player_id} has not moved. Skipping probability update.")
+                continue
+            
+            total_distance = 0
+            movement_deltas = []
+            current_distance = []
+
+            for _, animal_position in self.animal_positions:
+                dist_t1 = self.manhattan_distance(position, animal_position)
+                dist_t0 = self.manhattan_distance(previous_position, animal_position)
+                movement_deltas.append(dist_t1 - dist_t0)
+                current_distance.append(dist_t1)
+                total_distance += dist_t1
+
+            logger.info(f"Movement deltas: {movement_deltas}")
+
+            rewards = []
+            exponentials = []
+            lhood_denom = 0
+
+            for i in range(len(self.animal_positions)):
+                distance_factor = total_distance / current_distance[i] if current_distance[i] != 0 else total_distance
+                rewards.append(-movement_deltas[i] * distance_factor)
+                calc_exponential = math.exp(self.alpha * rewards[i])
+                exponentials.append(calc_exponential)
+                lhood_denom += calc_exponential
+
+            logger.info(f"Rewards: {rewards}")
+            
+
+            new_probabilities = []
+            for i in range(len(self.animal_positions)):
+                if lhood_denom == 0:
+                    likelihood = 1 / len(self.animal_positions)
+                else:
+                    likelihood = exponentials[i] / lhood_denom
+                    prior = self.player_probabilities[player_id][i] * likelihood
+                    new_probabilities.append(prior)
+            
+            self.player_probabilities[player_id] = self.normalize(new_probabilities)
+            self.previous_player_positions[player_id] = position
+            
+        logger.info(f"Updated probabilities: {self.player_probabilities}")
+
+    
+    def normalize(self, prob_list, epsilon=0.02):
+        total = sum(prob_list)
+        if total == 0:
+            return [1 / len(prob_list)] * len(prob_list)
+        
+        prob_list = [v / total for v in prob_list]
+        prob_list = [max(min(v, 1 - epsilon), epsilon) for v in prob_list]
+        total = sum(prob_list)
+        return [v / total for v in prob_list]
+
+    
+    def decide_action(self):
+        """Decides which animal to pursue based on the highest probability across players."""
+        
+        # Create a reference list of animals in the order they appear in self.animal_positions
+        animal_types = [animal_id for animal_id, _ in self.animal_positions]  
+        best_targets = {} 
+        
+        for player_id, probabilities in self.player_probabilities.items():
+            if player_id == 1:
+                continue
+            
+            max_prob = max(probabilities)
+            best_index = probabilities.index(max_prob)
+            best_targets[player_id] = (animal_types[best_index], best_index)  # (animal type, index)
+            logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+
+        # Check if any player has a stag as their best option
+        stag_targets = [index for player, (animal, index) in best_targets.items() if animal == 'stag']
+        hare_targets = [index for player, (animal, index) in best_targets.items() if animal == 'hare']
+        
+        if stag_targets:  # If any player has a stag as the best target, go to the closest one
+            return min(stag_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+        
+        # Otherwise, look for the closest hare that is not already targeted by another player
+        available_hares = [idx for idx in range(len(animal_types)) if animal_types[idx] == 'hare' and idx not in hare_targets]
+        
+        if available_hares:
+            logger.info("Available hares: " + str(available_hares))
+            return min(available_hares, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+        
+        logger.info("No available hares; choosing the closest among those already targeted.")
+        # If no hares are available, choose the closest among those already targeted
+        return min(hare_targets, key=lambda idx: self.manhattan_distance(self.my_position, self.animal_positions[idx][1]))
+    
+    def move_towards(self, current_position, target_position):
+        """Determines the direction to move toward the target with variation."""
+        options = []
+        
+        if target_position[0] > current_position[0]:
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
+    
+    def get_gaussian_detect_prob(self, d, sigma):
+        return np.exp(- (d**2) / (2 * sigma**2))
+
+    def get_observation(self):
+        robot_pos = self.my_position
+        player_positions = {}
+        for player_id, pos in self.player_positions.items():
+            if player_id == 1:
+                continue
+            d = self.manhattan_distance(robot_pos, pos)
+            p_detect = self.get_gaussian_detect_prob(d, self.visibility)
+            if np.random.rand() < p_detect:
+                player_positions[player_id] = pos
+            else:
+                player_positions[player_id] = None
+        return player_positions
+    
+    def init_belief_state(self):
+        for player_id, _ in self.player_positions.items():
+            if player_id == 1:
+                continue
+            self.belief[player_id] = np.ones((self.n_row, self.n_col)) / (self.n_row*self.n_col)
+
+        self.adjacency_list = self._compute_adjacency_list()
+        
+        self.initialized_belief = True
+
+    def _compute_adjacency_list(self):
+        adjacency_list = {}
+        for r in range(self.n_row):
+            for c in range(self.n_col):
+                neighbors = []
+                for (dr, dc) in [(0,0),(1,0),(-1,0),(0,1),(0,-1)]:
+                    nr, nc = r+dr, c+dc
+                    if 0 <= nr < self.n_row and 0 <= nc < self.n_col:
+                        neighbors.append((nr, nc))
+                adjacency_list[(r, c)] = neighbors
+        return adjacency_list
+
+
+    def get_next_key(self):
+        """Decides the next action based on probabilities."""
+        if not self.initialized_probabilities:
+            self.initialize_probabilities()
+
+        if not self.game_config_loaded:
+            self.load_game_config()
+
+        logger.info("-------------------------------------------------------------")
+        logger.info(f"Iteration: {self.iterations}")
+        
+        self.update_probabilities()
+        best_target = self.decide_action()
+        target_position = self.animal_positions[best_target][1]
+        next_move = self.move_towards(self.my_position, target_position)
+
+        logger.info(f"Going for {best_target} at {target_position}, moving: {repr(next_move)}")
+        self.iterations += 1
+        
+        return next_move
     
 
 
