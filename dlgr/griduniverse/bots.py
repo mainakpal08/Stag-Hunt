@@ -1202,14 +1202,17 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.initialized_probabilities = True
         logger.info(f"Initialized probabilities: {self.player_probabilities}")
     
-    def update_probabilities(self):
+    def update_probabilities(self, visible_players):
         """Updates probabilities for each animal based on player movements."""
         if not self.player_positions or not self.animal_positions:
             logger.error("Player or animal positions not initialized; cannot update probabilities.")
             return
 
-        for player_id, position in self.player_positions.items():
+        for player_id, position in visible_players.items():
             if player_id == 1:
+                continue
+
+            if position is None:
                 continue
 
             previous_position = self.previous_player_positions.get(player_id)
@@ -1281,17 +1284,26 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         
         # Create a reference list of animals in the order they appear in self.animal_positions
         animal_types = [animal_id for animal_id, _ in self.animal_positions]  
-        best_targets = {} 
+        best_targets = {}
+        all_probs_equal = True
         
         for player_id, probabilities in self.player_probabilities.items():
             if player_id == 1:
                 continue
             
             max_prob = max(probabilities)
-            best_index = probabilities.index(max_prob)
-            best_targets[player_id] = (animal_types[best_index], best_index)  # (animal type, index)
-            logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+            min_prob = min(probabilities)
+            
+            if max_prob != min_prob:  
+                all_probs_equal = False  
+                best_index = probabilities.index(max_prob)
+                best_targets[player_id] = (animal_types[best_index], best_index)
+                logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
 
+        if all_probs_equal:
+            logger.info("All probabilities are equal; bot will stay in place.")
+            return None
+        
         # Check if any player has a stag as their best option
         stag_targets = [index for player, (animal, index) in best_targets.items() if animal == 'stag']
         hare_targets = [index for player, (animal, index) in best_targets.items() if animal == 'hare']
@@ -1340,6 +1352,8 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
                 player_positions[player_id] = pos
             else:
                 player_positions[player_id] = None
+        
+        logger.info(f"Visible players: {player_positions}")
         return player_positions
     
     def init_belief_state(self):
@@ -1376,8 +1390,14 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         logger.info("-------------------------------------------------------------")
         logger.info(f"Iteration: {self.iterations}")
         
-        self.update_probabilities()
+        visible_players = self.get_observation()
+        self.update_probabilities(visible_players)
         best_target = self.decide_action()
+
+        if best_target is None:
+            logger.info("No clear target determined; staying in place.")
+            return None
+
         target_position = self.animal_positions[best_target][1]
         next_move = self.move_towards(self.my_position, target_position)
 
