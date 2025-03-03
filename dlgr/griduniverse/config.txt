@@ -24,8 +24,8 @@ walls_density = 0
 cook_time = 15
 time_per_round = 2
 game_over_cond = time
-hare_count_after_new_round = 4
-stag_count_after_new_round = 1
+hare_count_after_new_round = 2
+stag_count_after_new_round = 5
 
 [Docker]
 [docker_image_base_name = ghcr.io/lucaslinzmeier/dallinger-griduniverse/griduniverse] 

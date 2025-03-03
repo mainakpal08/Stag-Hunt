@@ -1140,6 +1140,7 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.team_goal = {'hare': 0.5, 'stag': 0.5}
         self.num_stag = 0
         self.num_hare = 0
+        self.animal_positions_backup = None
 
     def client_info(self):
         return {"id": self.id, "type": "bot"}
@@ -1162,6 +1163,7 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.team_goal = {'hare': 0.5, 'stag': 0.5}
         self.num_stag = 0
         self.num_hare = 0
+        self.animal_positions_backup = None
     
     def initialize_probabilities(self):
         """Initializes the probabilities for all players going for each animal."""
@@ -1602,6 +1604,15 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
 
     def get_next_key(self):
         """Decides the next action based on probabilities."""
+        if self.animal_positions_backup is None:
+            self.animal_positions_backup = self.animal_positions
+            logger.info(f"Animal positions backup: {self.animal_positions_backup}")
+
+        if self.animal_positions_backup != self.animal_positions:
+            self.reset_bot()
+            logger.info(f"Animal positions changed; resetting bot.")
+            return None
+        
         if self.iterations < 3:
             self.iterations += 1
             return None
