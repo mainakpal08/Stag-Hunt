@@ -62,9 +62,15 @@
 
 <div id="dashboard">
     <p>
-        <span id="score">0</span> points,
-        <span id="time">?</span> more players need to collect an animal.
-        {% if experiment.grid.num_rounds > 1 %}Round <span id="round">?</span> of 5{% endif %}
+        Player Score: <span id="score">0</span> points |  
+        <!-- Team Score: <span id="team-score">0</span> points   -->
+    </p>
+
+    <p>
+        <span id="time">?</span> seconds remaining for this round.
+        {% if experiment.grid.num_rounds > 1 %}
+            Round <span id="round">?</span> of {{ experiment.grid.num_rounds }}
+        {% endif %}
     </p>
 </div>
 <p class="grid-loading">Loading Game World <span>.</span><span>.</span><span>.</span></p>
