@@ -400,6 +400,14 @@ class HighPerformanceBaseGridUniverseBot(HighPerformanceBotBase, BaseGridUnivers
                 "player_id": self.participant_id,
                 "move": "right",
             }
+        # elif key == Keys.SPACE:
+        #     message = {
+        #         "type": "item_consume",
+        #         "player_id": self.participant_id,
+        #     }
+
+        # logger.info("Sending message: " + json.dumps(message))
+        
         if message:
             self.publish(message)
 
@@ -464,7 +472,6 @@ class RandomBot(HighPerformanceBaseGridUniverseBot):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Inicializa o ID do bot
         self.id = str(uuid.uuid4())
     
     def client_info(self):

@@ -1,18 +1,18 @@
+import os
+import yaml
 
-movement_deltas = []
-total_distance = 0
-animal_positions = [('hare', (0, 17)), ('hare', (4, 22)), ('stag', (6, 3)), ('stag1', (7, 8))]
-position = (5, 5)
-previous_position = (0, 0)
+game_config_file = os.path.join(os.path.dirname(__file__), GAME_CONFIG_FILE)
+with open(game_config_file, "r") as game_config_stream:
+    game_config = yaml.safe_load(game_config_stream)
+item_config = {o["item_id"]: o for o in game_config.get("items", ())}
 
-# Função para calcular a distância de Manhattan entre duas posições
-def manhattan_distance(pos1, pos2):
-    return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+# If any item is missing a key, add it with default value.
+item_defaults = self.game_config.get("item_defaults", {})
+for item in self.item_config.values():
+    for prop in item_defaults:
+        if prop not in item:
+            item[prop] = item_defaults[prop]
 
-for animal_id, animal_position in animal_positions:
-    dist_t1 = manhattan_distance(position, animal_position)
-    dist_t0 = manhattan_distance(previous_position, animal_position)
-    movement_deltas.append((animal_id, dist_t1 - dist_t0))  # Armazenando como tupla
-    total_distance += dist_t1
+hare_count = item_config.get("hare", {}).get("item_count", 0)
+stag_count = item_config.get("stag", {}).get("item_count", 0)
 
-print(movement_deltas)

@@ -1,6 +1,7 @@
-"""The Guniduniverse."""
+"""The Griduniverse."""
 
 import collections
+import csv
 import datetime
 import itertools
 import json
@@ -18,7 +19,7 @@ import flask
 import gevent
 import yaml
 from cached_property import cached_property
-from dallinger import db, recruiters
+from dallinger import db
 from dallinger.compat import unicode
 from dallinger.config import get_config
 from dallinger.experiment import Experiment
@@ -26,17 +27,13 @@ from faker import Factory
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-#Line Edited - Multiple Groups
-from operator import attrgetter
-
 from . import distributions
 from .bots import Bot
 from .maze import Wall, labyrinth
 from .models import Event
 
 logger = logging.getLogger(__file__)
-logger = logging.getLogger("griduniverse")
-logger.setLevel(logging.INFO)
+
 
 GAME_CONFIG_FILE = "game_config.yml"
 
@@ -98,6 +95,7 @@ GU_PARAMS = {
     "difi_group_label": unicode,
     "difi_group_image": unicode,
     "fun_survey": bool,
+    "map_csv": unicode,
     "pre_difi_question": bool,
     "pre_difi_group_label": unicode,
     "pre_difi_group_image": unicode,
@@ -114,12 +112,6 @@ GU_PARAMS = {
     "donation_multiplier": float,
     "num_recruits": int,
     "state_interval": float,
-    "goal_items": int,
-    "game_over_cond": unicode,
-    "num_cook": int,
-    "cook_time": int,
-    "hare_count_after_new_round": int,
-    "stag_count_after_new_round": int,
 }
 
 DEFAULT_ITEM_CONFIG = {
@@ -129,6 +121,7 @@ DEFAULT_ITEM_CONFIG = {
         "calories": 1,
     }
 }
+
 
 class PluralFormatter(string.Formatter):
     def format_field(self, value, format_spec):
@@ -170,7 +163,6 @@ class Gridworld(object):
 
     GREEN = [0.51, 0.69, 0.61]
     WHITE = [1.00, 1.00, 1.00]
-    
     wall_locations = None
     item_locations = None
     walls_updated = True
@@ -187,9 +179,6 @@ class Gridworld(object):
             return
 
         self.log_event = kwargs.get("log_event", lambda x: None)
-
-        #Line edited
-        self.prolific_assignment_id = ""
 
         # Players
         self.num_players = kwargs.get("max_participants", 3)
@@ -210,8 +199,6 @@ class Gridworld(object):
         self.padding = kwargs.get("padding", 1)
         self.chat_visibility_threshold = kwargs.get("chat_visibility_threshold", 0.4)
         self.spatial_chat = kwargs.get("spatial_chat", False)
-
-        # EDITED
         self.visibility = kwargs.get("visibility", 40)
         self.visibility_ramp_time = kwargs.get("visibility_ramp_time", 4)
         self.background_animation = kwargs.get("background_animation", True)
@@ -224,17 +211,11 @@ class Gridworld(object):
         self.motion_tremble_rate = kwargs.get("motion_tremble_rate", 0)
 
         # Components
-
-        self.show_chatroom = kwargs.get("show_chatroom", True)
-
-
-        self.others_visible = kwargs.get("others_visible", True)
-
-
-
+        self.show_chatroom = kwargs.get("show_chatroom", False)
         self.show_grid = kwargs.get("show_grid", True)
 
         # Identity
+        self.others_visible = kwargs.get("others_visible", True)
         self.num_colors = kwargs.get("num_colors", 3)
         self.mutable_colors = kwargs.get("mutable_colors", False)
         self.costly_colors = kwargs.get("costly_colors", False)
@@ -245,7 +226,7 @@ class Gridworld(object):
         self.contagion_hierarchy = kwargs.get("contagion_hierarchy", False)
         self.identity_signaling = kwargs.get("identity_signaling", False)
         self.identity_starts_visible = kwargs.get("identity_starts_visible", False)
-        self.use_identicons = kwargs.get("use_identicons", True)
+        self.use_identicons = kwargs.get("use_identicons", False)
 
         # Walls
         self.walls_visible = kwargs.get("walls_visible", True)
@@ -257,7 +238,7 @@ class Gridworld(object):
 
         # Payoffs
         self.initial_score = kwargs.get("initial_score", 0)
-        self.dollars_per_point = kwargs.get("dollars_per_point", 0) # Change for reward
+        self.dollars_per_point = kwargs.get("dollars_per_point", 0.02)
         self.tax = kwargs.get("tax", 0.00)
         self.relative_deprivation = kwargs.get("relative_deprivation", 1)
         self.frequency_dependence = kwargs.get("frequency_dependence", 0)
@@ -299,27 +280,11 @@ class Gridworld(object):
         )
         self.leach_survey = kwargs.get("leach_survey", False)
 
-        # Collab parameters
-        self.goal_items = kwargs.get("goal_items", 100)
-        self.num_cook = kwargs.get("num_cook", 1)
-        self.cook_time = kwargs.get("cook_time", 0)
-        self.game_over_cond = kwargs.get("game_over_cond", "time")
-
         # Set some variables.
         self.players = {}
         self.item_locations = {}
         self.items_consumed = []
-
-        #LINE EDITED ROUND LOGIC
-        self.num_items_consumed = 0
-
-        self.items_cooked = []
-        self.items_cooking = 0
-        self.oven_in_use = False
-        self.oven_time_left = 0
         self.start_timestamp = kwargs.get("start_timestamp", None)
-        self.hare_count = kwargs.get("hare_count_after_new_round", 0)
-        self.stag_count = kwargs.get("stag_count_after_new_round", 0)
 
         self.round = 0
 
@@ -410,28 +375,11 @@ class Gridworld(object):
 
     @property
     def remaining_round_time(self):
-        '''
         if self.start_timestamp is None:
             return 0
         raw_remaining = self.time_per_round - self.elapsed_round_time
 
-        return max(0, raw_remaining)'''
-
-        #LINE EDITED ROUND LOGIC -
-        if self.start_timestamp is None:
-            return 0
-
-        elap = 0
-
-        if self.items_consumed is None:
-            elap = 0
-        else: elap = self.num_items_consumed
-        
-        raw_remaining = self.time_per_round - elap
-
         return max(0, raw_remaining)
-
-        #LINE EDITED ROUND LOGIC -
 
     @property
     def group_donation_enabled(self):
@@ -496,53 +444,8 @@ class Gridworld(object):
 
         if not self.remaining_round_time:
             self.round += 1
-
-            #Line Edited Round Logic
-            msg = {
-            "type": "round_end",
-            "round": self.round -1,
-            }
-
-            #Line Edited Database storage
-            self.log_event(msg)
-
-            #LINE EDITED ROUND LOGIC
-            self.num_items_consumed = 0
-
             if self.game_over:
                 return
-
-            #LINE EDITED ROUND LOGIC -
-            # DESPAWN all items, put a blank back in player inventory and respawn 
-            # To correctly update the item count ("hare" and "stag"), you have to update the config.txt AND the game_config.yml.
-            # The game_config.yml is used to set the initial item count, and the config.txt is used to update the item count after each round.
-
-            #DESPAWN
-            self.item_locations = {}
-
-            if(self.round != 0):
-                for _ in range(self.hare_count):
-                    self.spawn_item(item_id = "hare")
-                for _ in range(self.stag_count):
-                    self.spawn_item(item_id = "stag")
-            
-                self.items_updated = True
-
-            #Blank in player inventory
-            for player in self.players.values():
-
-                #Spawn the player with a blank item
-                item_props = self.item_config["blank"]
-
-                new_item = Item(
-                    id=(len(self.item_locations) + len(self.items_consumed)),
-                    item_config=item_props,
-                )
-
-                player.current_item = new_item
-
-            #LINE EDITED ROUND LOGIC -
-
 
             self.start_timestamp = time.time()
             # Delay round for leaderboard display
@@ -606,6 +509,18 @@ class Gridworld(object):
             player.payoff *= inter_proportions[player.color_idx]
             player.payoff *= self.dollars_per_point
 
+    def load_map(self, csv_file_path):
+        with open(csv_file_path) as csv_file:
+            grid_state = self.csv_to_grid_state(csv_file)
+        self.deserialize(grid_state)
+
+    def csv_to_grid_state(self, csv_file):
+        from .csv_gridworlds import matrix2gridworld  # avoid circular import
+
+        reader = csv.reader(csv_file)
+        grid_state = matrix2gridworld(list(reader))
+        return grid_state
+
     def build_labyrinth(self):
         if self.walls_density and not self.wall_locations:
             start = time.time()
@@ -632,12 +547,7 @@ class Gridworld(object):
 
     @property
     def game_over(self):
-        if self.game_over_cond == "time":
-            return self.round >= self.num_rounds
-        elif self.game_over_cond == "foraging":
-            return len(self.items_consumed) == self.goal_items
-        elif self.game_over_cond == "cooking":
-            return len(self.items_cooked) == self.goal_items
+        return self.round >= self.num_rounds
 
     def serialize(self, include_walls=True, include_items=True):
         grid_data = {
@@ -646,10 +556,6 @@ class Gridworld(object):
             "donation_active": self.donation_active,
             "rows": self.rows,
             "columns": self.columns,
-            #LINE EDITED CONDITIONS
-            "chat_visible": self.show_chatroom,
-            #LINE EDITED CONDITIONS
-            "others_visible": self.others_visible,
         }
 
         if include_walls:
@@ -669,18 +575,20 @@ class Gridworld(object):
                     self.columns,
                 )
             )
-        self.round = state["round"]
+        self.round = state.get("round", 0)
         # @@@ can't set donation_active because it's a property
         # self.donation_active = state['donation_active']
 
         self.players = {}
         for player_state in state["players"]:
-            player_state["color_name"] = player_state.pop("color", None)
+            # Avoid mutating the caller's data
+            new_state = player_state.copy()
+            new_state["color_name"] = new_state.pop("color", None)
             player = Player(
                 pseudonym_locale=self.pseudonyms_locale,
                 pseudonym_gender=self.pseudonyms_gender,
                 grid=self,
-                **player_state,
+                **new_state,
             )
             self.players[player.id] = player
 
@@ -695,81 +603,21 @@ class Gridworld(object):
         if "items" in state:
             self.item_locations = {}
             for item_state in state["items"]:
-                # TODO verify this works at some point!
                 item_props = self.item_config[item_state["item_id"]]
-                obj = Item(item_config=item_props, **item_state)
+                invalid_params = ["item_id", "maturity"]
+                item_params = {
+                    k: v for k, v in item_state.items() if k not in invalid_params
+                }
+                obj = Item(item_props, **item_params)
                 self.item_locations[tuple(obj.position)] = obj
 
     def instructions(self):
-        color_costs = ""
-        order = ""
-        text = """<p>Thank you for participating in our experiment.  Here are the instructions:"""
-        text += """<p><p>Page 1/2: Basic Controls"""
-
-        text += """<br><img src='static/images/game_image.png' height='300'><br>"""
-        text += """<p>You are going to play a game live with another participant. 
-
-            <p>The game is played on a {g.columns} x {g.rows} grid, where each player occupies one block."""
-
-        if self.others_visible:
-            text += """  You and the other player will be marked by different colors (BLUE, YELLOW or ORANGE)."""
-        
-        else:
-            text += """  <b>However, you will not be able to see where the other player is on the grid.</b>"""
-
-        
-        text += """<p>You can move around the grid using the arrow keys.
-                <br><img src='static/images/keys.gif' height='60'><br>
-                You can collect items using the spacebar.
-                """
-        if self.player_overlap:
-            text += " More than one player may occupy a block at the same time."
-        
-      
-        text += """<p><p>Page 2/2: Game instructions"""
-        text += """<p>In this game, you and the other player are hunters!  
-            You can earn points by hunting the following animals."""
-
-        text += """<ul>
-                    <li>🐇 Hare (3 points)</li>
-                    <li>🦌 Stag (4 points)</li>
-                </ul>"""
-        
-        text += """You may only hunt once per round, so you must choose whether to hunt a hare or a stag: """
-
-        text += """<ul>
-                    <li>🐇 To hunt a hare (3 points), occupy its space and hit the spacebar. You will receive 3 points when the hare is caught.
-                    <br><img src='static/images/hare_collect.gif' height='300'><br>
-                    </li>
-                    <li>🦌 To hunt a stag (4 points): <b>both you and the other other player</b> must occupy the stag's space or be adjacent to the stag, 
-                    and one of you must hit the spacebar. Both players will receive 4 points when a stag is caught.
-                    <br><img src='static/images/stag_collect.gif' height='300'><br>
-                    </li>
-                </ul>"""
-
-        text += """<p>Animals do not disappear when you collect them."""
-        text += """<p>The game has 5 rounds, and a round ends after both players have hunted a hare or a stag.  
-        Remember: You cannot hunt both a hare and a stag in the same round, you must choose one or the other!"""
-
-        text += """<p><b>Your goal in this game is to get as many points as you can. </b>"""
-
-        text += """<p>You will receive <strong>$.05</strong> for each point
-                that you score at the end of the game.</p>"""
-
-        if self.show_chatroom:
-            text += """<p>A chatroom is available to send messages to the other
-                players."""
-            if self.pseudonyms:
-                text += """ Player names shown on the chat window are pseudonyms.
-                        <br><img src='static/images/chatroom.gif' height='150'>"""
-            text += "</p>"
-        return formatter.format(
-            text,
-            g=self,
-            order=order,
-            color_costs=color_costs,
-            color_list=", ".join(self.limited_player_color_names),
+        instructions_file_path = os.path.join(
+            os.path.dirname(__file__), "templates/instructions/instruct-ready.html"
         )
+        with open(instructions_file_path) as instructions_file:
+            instructions_html = instructions_file.read()
+            return instructions_html
 
     def consume(self):
         """Players consume the non-interactive items"""
@@ -785,10 +633,6 @@ class Gridworld(object):
                 del self.item_locations[position]
                 # Update existence and count of item.
                 self.items_consumed.append(item)
-
-                #LINE EDITED ROUND LOGIC
-                self.num_items_consumed += 1
-
                 self.items_updated = True
                 if item.respawn:
                     # respawn same type of item.
@@ -808,26 +652,6 @@ class Gridworld(object):
         if consumed and item.public_good:
             for player_to in self.players.values():
                 player_to.score += item.public_good * consumed
-    
-    def cook(self):
-        """Players need to put self.num_cook items in the oven to make 1 new food. 
-        The oven takes cook_time seconds to finish."""
-        for player in self.players.values():
-            position = tuple(player.position)
-            if position in self.item_locations:
-                item = self.item_locations[position]
-                if item.item_id == "oven":
-                    self.items_cooking += 1
-                    if (self.items_cooking == self.num_cook) and not self.oven_in_use: 
-                        self.oven_in_use = True
-
-                        for elapsed_time in range(self.cook_time, 0, -1):
-                            self.oven_time_left = elapsed_time
-                            time.sleep(1)
-                
-                        self.items_cooked.append(item)
-                        self.oven_in_use = False
-                        self.items_cooking = 0
 
     def spawn_item(self, position=None, item_id=None):
         """Respawn an item for a single position"""
@@ -845,27 +669,21 @@ class Gridworld(object):
             position = self._find_empty_position(item_id)
 
         item_props = self.item_config[item_id]
-
         new_item = Item(
             id=(len(self.item_locations) + len(self.items_consumed)),
             position=position,
             item_config=item_props,
         )
-
         self.item_locations[tuple(position)] = new_item
         self.items_updated = True
         logger.warning(f"Spawning new item: {new_item}")
-
-        logger.warning(self.others_visible)
-
-        
         self.log_event(
             {
                 "type": "spawn item",
                 "position": position,
             }
         )
-        
+
     def items_changed(self, last_items):
         locations = self.item_locations
         if len(last_items) != len(locations):
@@ -878,6 +696,30 @@ class Gridworld(object):
             if found.id != item["id"] or found.maturity != item["maturity"]:
                 return True
         return False
+
+    def trigger_transitions(self, time=time.time):
+        now = time()
+        to_change = []
+        for position, item in self.item_locations.items():
+            item_type = self.item_config.get(item.item_id)
+            if not item_type:
+                continue
+            if "auto_transition_time" in item_type:
+                if now - item.creation_timestamp >= item_type["auto_transition_time"]:
+                    target = item_type.get("auto_transition_target")
+                    new_target_item = target and Item(
+                        id=item.id,
+                        position=position,
+                        item_config=self.item_config[target],
+                    )
+                    to_change.append((position, new_target_item))
+        if to_change:
+            self.items_updated = True
+        for position, new_target_item in to_change:
+            if new_target_item is None:
+                del self.item_locations[position]
+            else:
+                self.item_locations[position] = new_target_item
 
     def replenish_items(self):
         items_by_type = collections.defaultdict(list)
@@ -950,21 +792,6 @@ class Gridworld(object):
             ),
             **kwargs,
         )
-
-        #LINE EDITED BLANK -
-        item_props = self.item_config["blank"]
-
-        new_item = Item(
-            id=(len(self.item_locations) + len(self.items_consumed)),
-            item_config=item_props,
-        )
-
-        player.current_item = new_item
-
-        #LINE EDITED BLANK -
-
-
-
         self.players[id] = player
         self._start_if_ready()
         return player
@@ -1044,7 +871,7 @@ class Item:
     """
 
     item_config: dict
-    id: int = field(default_factory=lambda: uuid.uuid4())
+    id: int = field(default_factory=lambda: uuid.uuid4().int)
     creation_timestamp: float = field(default_factory=time.time)
     position: tuple = (0, 0)
     remaining_uses: int = field(default=None)
@@ -1313,7 +1140,6 @@ class Griduniverse(Experiment):
         self.config = get_config()
         super(Griduniverse, self).__init__(session)
         self.experiment_repeats = 1
-
         self.redis_conn = db.redis_conn
         if session:
             self.setup()
@@ -1328,14 +1154,8 @@ class Griduniverse(Experiment):
 
     def configure(self):
         super(Griduniverse, self).configure()
-
         self.num_participants = self.config.get("max_participants", 3)
-        self.num_recruits = self.config.get("num_recruits", 3)
         self.quorum = self.num_participants
-        self.hare_count = self.config.get("hare_count_after_new_round", 2)
-        self.stag_count = self.config.get("stag_count_after_new_round", 1)
-    
-
         self.initial_recruitment_size = self.config.get(
             "num_recruits", self.num_participants
         )
@@ -1409,14 +1229,6 @@ class Griduniverse(Experiment):
             self.game_loop,
         ]
 
-    #Line Edited - Recruiter
-    @cached_property
-    def recruiter(self):
-        """Reference to a Recruiter, the Dallinger class that recruits
-        participants.
-        """
-        return recruiters.from_config(get_config())
-
     def create_network(self):
         """Create a new network by reading the configuration file."""
         class_ = getattr(dallinger.networks, self.network_factory)
@@ -1424,9 +1236,6 @@ class Griduniverse(Experiment):
 
     def create_node(self, participant, network):
         try:
-            # Line Edited - replaced status
-            if participant.status == "replaced":
-                participant.status = "working"
             return dallinger.models.Node(network=network, participant=participant)
         finally:
             if not self.networks(full=False):
@@ -1437,13 +1246,6 @@ class Griduniverse(Experiment):
     def setup(self):
         """Setup the networks."""
         self.node_by_player_id = {}
-        
-        #Line edited Prolific data correction
-        self.worker_id_to_assignment_id = {}
-        self.worker_id_test = ""
-        self.assignment_id_test = ""
-        self.perm_hit_id = ""
-
         if not self.networks():
             super(Griduniverse, self).setup()
             for net in self.networks():
@@ -1456,127 +1258,6 @@ class Griduniverse(Experiment):
 
     def recruit(self):
         self.recruiter().close_recruitment()
-
-
-    '''
-    #Line Edited - Normalize_entry
-    def normalize_entry_information(self, entry_information):
-
-        if "STUDY_ID" in entry_information:
-            logger.warning("STUDY_ID FORMAT")
-            logger.warning(entry_information)
-            hit_id = entry_information["STUDY_ID"]
-            worker_id = entry_information["PROLIFIC_PID"]
-            assignment_id = entry_information["SESSION_ID"]
-
-            self.worker_id_to_assignment_id[worker_id] = assignment_id
-            self.perm_hit_id = hit_id
-            self.worker_id_test = worker_id
-            self.assignment_id_test = assignment_id
-
-            self.grid.prolific_assignment_id = assignment_id
-
-            logger.warning("USEFUL INFO \n")
-            logger.warning("")
-
-            logger.warning("STORING IN GRID?")
-            logger.warning(self.grid.prolific_assignment_id)
-            logger.warning("TEST WORKER ID AND ASSIGNMENT ID")
-            logger.warning(self.worker_id_test)
-            logger.warning(self.assignment_id_test)
-            logger.warning("WORKER-ASSIGNMENT DICTIONARY")
-            for key, value in self.worker_id_to_assignment_id.items():
-                logger.warning("Worker IN DICT: " + key)
-                logger.warning("Assignment IN DICT: " + value)
-
-            participant_data = {
-            "hit_id": worker_id,
-            "worker_id": worker_id,
-            "assignment_id": worker_id,
-            "entry_information": entry_information, 
-            }
-
-            return participant_data
-        
-        else:
-            logger.warning("NON-STUDY_ID FORMAT")
-            logger.warning(entry_information)
-
-            worker_id = entry_information.pop(
-                "workerId", entry_information.pop("worker_id", None)
-            )
-
-            logger.warning("USEFUL INFO \n")
-            logger.warning("")
-            logger.warning("STORING IN GRID?")
-            logger.warning(self.grid.prolific_assignment_id)
-
-            logger.warning("TEST WORKER ID AND ASSIGNMENT ID")
-            logger.warning(self.worker_id_test)
-            logger.warning(self.assignment_id_test)
-            logger.warning("WORKER-ASSIGNMENT DICTIONARY")
-            for key, value in self.worker_id_to_assignment_id.items():
-                logger.warning("Worker IN DICT: " + key)
-                logger.warning("Assignment IN DICT: " + value)
-
-            participant_data = {
-            "hit_id": worker_id,
-            "assignment_id": worker_id,
-            "worker_id": worker_id
-             }
-            if entry_information:
-                participant_data["entry_information"] = entry_information
-            return participant_data
-    '''
-
-    '''
-    def create_participant(
-        self,
-        worker_id,
-        hit_id,
-        assignment_id,
-        mode,
-        recruiter_name=None,
-        fingerprint_hash=None,
-        entry_information=None,
-    ):
-        """Creates and returns a new participant object. Uses
-        :attr:`~dallinger.experiment.Experiment.participant_constructor` as the
-        constructor.
-
-        :param worker_id: the recruiter Worker Id
-        :type worker_id: str
-        :param hit_id: the recruiter HIT Id
-        :type hit_id: str
-        :param assignment_id: the recruiter Assignment Id
-        :type assignment_id: str
-        :param mode: the application mode
-        :type mode: str
-        :param recruiter_name: the recruiter name
-        :type recruiter_name: str
-        :param fingerprint_hash: the user's fingerprint
-        :type fingerprint_hash: str
-        :param entry_information: a JSON serializable data structure containing
-                                  additional participant entry information
-        :returns: A :attr:`~dallinger.models.Participant` instance
-        """
-        if not recruiter_name:
-            recruiter = self.recruiter
-            if recruiter:
-                recruiter_name = recruiter.nickname
-
-        participant = self.participant_constructor(
-            recruiter_id=recruiter_name,
-            worker_id=worker_id,
-            assignment_id=worker_id,
-            hit_id=worker_id,
-            mode=mode,
-            fingerprint_hash=fingerprint_hash,
-            entry_information=entry_information,
-        )
-        self.session.add(participant)
-        return participant
-    '''
 
     def bonus(self, participant):
         """The bonus to be awarded to the given participant.
@@ -1674,19 +1355,6 @@ class Griduniverse(Experiment):
         """Publish a message to all griduniverse clients"""
         self.redis_conn.publish("griduniverse", json.dumps(msg))
 
-    #LINE EDITED - GET NETWORK
-    def get_network_for_participant(self, participant):
-        if participant.nodes(failed="all"):
-            return None
-
-        networks = self.networks(full=False)
-
-        if networks:
-            return min(networks, key = attrgetter("id"))
-
-        else:
-            return None
-
     def handle_connect(self, msg):
         player_id = msg["player_id"]
         if self.config.get("replay", False):
@@ -1699,7 +1367,7 @@ class Griduniverse(Experiment):
             return
 
         logger.info("Client {} has connected.".format(player_id))
-        client_count = len(self.grid.players)
+        client_count = len(self.node_by_player_id)
         logger.info("Grid num players: {}".format(self.grid.num_players))
         if client_count < self.grid.num_players:
             participant = self.session.query(dallinger.models.Participant).get(
@@ -1716,13 +1384,14 @@ class Griduniverse(Experiment):
                 # We use the current node id modulo the number of colours
                 # to pick the user's colour. This ensures that players are
                 # allocated to colours uniformly.
-                self.grid.spawn_player(
-                    id=player_id,
-                    color_name=self.grid.limited_player_color_names[
-                        node.id % self.grid.num_colors
-                    ],
-                    recruiter_id=participant.recruiter_id,
-                )
+                if player_id not in self.grid.players:
+                    self.grid.spawn_player(
+                        id=player_id,
+                        color_name=self.grid.limited_player_color_names[
+                            node.id % self.grid.num_colors
+                        ],
+                        recruiter_id=participant.recruiter_id,
+                    )
             else:
                 logger.info("No free network found for player {}".format(player_id))
 
@@ -1856,7 +1525,6 @@ class Griduniverse(Experiment):
             player.add_wall = position
 
     def handle_item_consume(self, msg):
-        logger.info("----- Handling item consumption -----")
         player = self.grid.players[msg["player_id"]]
         player_item = player.current_item
         if player_item is None or not player_item.calories:
@@ -1871,10 +1539,6 @@ class Griduniverse(Experiment):
         player_item.remaining_uses -= 1
         if not player_item.remaining_uses:
             self.grid.items_consumed.append(player_item)
-
-            #LINE EDITED ROUND LOGIC
-            self.grid.num_items_consumed += 1
-
             player.current_item = None
 
         if player.color_idx > 0:
@@ -1888,7 +1552,6 @@ class Griduniverse(Experiment):
                 player_to.score += player_item.public_good
 
     def handle_item_pick_up(self, msg):
-        logger.info("----- Handling item pick up -----")
         player = self.grid.players[msg["player_id"]]
         player_item = player.current_item
         position = tuple(msg["position"])
@@ -1927,21 +1590,8 @@ class Griduniverse(Experiment):
         if transition is None:
             transition = self.transition_config.get(transition_key)
 
-        #LINE EDITED NEIGHBORS - 
         required_actors = transition and transition.get("required_actors", 0)
         neighbors = player.neighbors()
-
-        '''if transition is None:
-            error_msg = {
-                "type": "action_error",
-                "player_id": player.id,
-                "position": list(position),
-                "item": location_item and location_item.serialize(),
-                "player_item": player_item and player_item.serialize(),
-            }
-            self.publish(error_msg)
-            return'''
-
         if (transition is None) or (
             required_actors and len(neighbors) + 1 < required_actors
         ):
@@ -1955,118 +1605,58 @@ class Griduniverse(Experiment):
             self.publish(error_msg)
             return
 
-        if required_actors and len(neighbors) + 1 < required_actors:
-            other_player_item = null
+        # these values may be positive or negative, so we may add or remove uses
+        modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
+        if player_item and player_item.remaining_uses:
+            player_item.remaining_uses += modify_actor_uses
+        if location_item and location_item.remaining_uses:
+            location_item.remaining_uses += modify_target_uses
+
+        # An item that is replaced or has no remaining uses has been "consumed"
+        if player_item and (
+            (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
+        ):
+            self.grid.items_consumed.append(player_item)
+            player.current_item = None
+            self.grid.items_updated = True
+        if location_item and (
+            (location_item.remaining_uses < 1) or transition["target_end"] != target_key
+        ):
+            del self.grid.item_locations[position]
+            self.grid.items_consumed.append(location_item)
+            self.grid.items_updated = True
+
+        # The player's item type has changed
+        if transition["actor_end"] != actor_key:
+            if transition["actor_end"] is not None:
+                replacement_item_config = self.item_config.get(transition["actor_end"])
+                replacement_item = Item(
+                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
+                    item_config=replacement_item_config,
+                )
+            else:
+                replacement_item = None
+            player.current_item = replacement_item
+            self.grid.items_updated = True
+
+        # The location's item type has changed
+        if transition["target_end"] != target_key:
+            new_target_item = Item(
+                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
+                position=position,
+                item_config=self.item_config[transition["target_end"]],
+            )
+            self.grid.item_locations[position] = new_target_item
+            self.grid.items_updated = True
+
+        # Possibly distribute calories to participating players
+        transition_calories = transition.get("calories")
+        if transition_calories:
+            per_player = transition_calories // (len(neighbors) + 1)
             for other_player in neighbors:
-                    other_player._item = other_player.current_item
-            
-            if other_player_item.id != "blank":
-                error_msg = {
-                    "type": "action_error",
-                    "player_id": player.id,
-                    "position": list(position),
-                    "item": location_item and location_item.serialize(),
-                    "player_item": player_item and player_item.serialize(),
-                }
-                self.publish(error_msg)
-                return
-        #Line Edited Database storage
-        msg = {
-            "type": "item_transition_info",
-            "player_id": player.id,
-            "item": location_item and location_item.serialize(),
-        }
-
-        #Line Edited Database storage
-        self.grid.log_event(msg)
-        
-
-        
-        #Line EDITED NEIGHBORS - 
-        
-        # The item is being put in the oven
-        if transition["target_start"] == "oven":
-            num_pies = self.grid.items_cooked
-            if not self.grid.oven_in_use:
-                player.current_item = None
-                self.grid.cook()
-
-            if self.grid.items_cooked != num_pies:
-                new_oven = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    position=position,
-                    item_config=self.item_config["oven_with_pie"],
-                )
-                self.grid.item_locations[position] = new_oven
-                self.grid.items_updated = True
-
-        else:
-            # these values may be positive or negative, so we may add or remove uses
-            modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
-            if player_item and player_item.remaining_uses:
-                player_item.remaining_uses += modify_actor_uses
-            if location_item and location_item.remaining_uses:
-                location_item.remaining_uses += modify_target_uses
-
-            # An item that is replaced or has no remaining uses has been "consumed"
-            if player_item and (
-                (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
-            ):
-                self.grid.items_consumed.append(player_item)
-
-                #LINE EDITED ROUND LOGIC
-                self.grid.num_items_consumed += 1
-
-                #Line EDITED NEIGHBORS
-                if transition.get("required_actors") == 2:
-                    self.grid.num_items_consumed += 1
-
-
-                player.current_item = None
-                self.grid.items_updated = True
-            if location_item and (
-                (location_item.remaining_uses < 1) or transition["target_end"] != target_key
-            ):
-                del self.grid.item_locations[position]
-                self.grid.items_consumed.append(location_item)
-
-                #LINE EDITED ROUND LOGIC
-                self.grid.num_items_consumed += 1
-
-
-                self.grid.items_updated = True
-
-            # The player's item type has changed
-            if transition["actor_end"] != actor_key:
-                new_player_item = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    item_config=self.item_config[transition["actor_end"]],
-                )
-                player.current_item = new_player_item
-                self.grid.items_updated = True
-
-            # The location's item type has changed
-            if transition["target_end"] != target_key:
-                new_target_item = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    position=position,
-                    item_config=self.item_config[transition["target_end"]],
-                )
-                self.grid.item_locations[position] = new_target_item
-                self.grid.items_updated = True
-
-            #LINE EDITED NEIGHBORS -
-            # Possibly distribute calories to participating players
-            transition_calories = transition.get("calories")
-            if transition_calories:
-                per_player = transition_calories // (len(neighbors) + 1)
-                for other_player in neighbors:
-                    other_player.score += per_player
-                player.score += per_player
-                player.score += transition_calories % (len(neighbors) + 1)
-
-            #LINE EDITED NEIGHBORS - 
-        
+                other_player.score += per_player
+            player.score += per_player
+            player.score += transition_calories % (len(neighbors) + 1)
 
     def handle_item_drop(self, msg):
         player = self.grid.players[msg["player_id"]]
@@ -2131,33 +1721,13 @@ class Griduniverse(Experiment):
             if update_items:
                 last_items = grid_state["items"]
 
-            if self.grid.game_over_cond == "time":
-                message = {
-                    "type": "state",
-                    "grid": json.dumps(grid_state),
-                    "count": count,
-                    "remaining_time": self.grid.remaining_round_time,
-                    "round": self.grid.round,
-                }
-            elif self.grid.game_over_cond == "foraging":
-                message = {
-                    "type": "state",
-                    "grid": json.dumps(grid_state),
-                    "count": count,
-                    "remaining_time": self.grid.goal_items - len(self.grid.items_consumed),
-                    "round": self.grid.round,
-                }
-
-            elif self.grid.game_over_cond == "cooking":
-                message = {
-                    "type": "state",
-                    "grid": json.dumps(grid_state),
-                    "count": count,
-                    "remaining_time": self.grid.goal_items - len(self.grid.items_cooked),
-                    "oven_time_left": self.grid.oven_time_left,
-                    "oven_in_use": self.grid.oven_in_use,
-                    "round": self.grid.round,
-                }
+            message = {
+                "type": "state",
+                "grid": json.dumps(grid_state),
+                "count": count,
+                "remaining_time": self.grid.remaining_round_time,
+                "round": self.grid.round,
+            }
 
             self.publish(message)
             if self.grid.game_over:
@@ -2166,7 +1736,10 @@ class Griduniverse(Experiment):
     def game_loop(self):
         """Update the world state."""
         gevent.sleep(0.1)
-        if not self.config.get("replay", False):
+        map_csv_path = self.config.get("map_csv", None)
+        if map_csv_path is not None:
+            self.grid.load_map(map_csv_path)
+        elif not self.config.get("replay", False):
             self.grid.build_labyrinth()
             logger.info("Spawning items")
             for item_type in self.item_config.values():
@@ -2221,6 +1794,8 @@ class Griduniverse(Experiment):
             if (now - previous_second_timestamp) > 1.000:
                 # Grow or shrink the item stores.
                 self.grid.replenish_items()
+                # Trigger automatic transitions.
+                self.grid.trigger_transitions()
 
                 abundances = {}
                 for player in self.grid.players.values():
@@ -2366,8 +1941,6 @@ class Griduniverse(Experiment):
                 "grid": state,
                 "count": self.state_count,
                 "remaining_time": self.grid.remaining_round_time,
-                "oven_time_left": self.grid.oven_time_left,
-                "oven_in_use": self.oven_in_use,
                 "round": state["round"],
             }
             self.grid.deserialize(state)
@@ -2409,7 +1982,10 @@ class Griduniverse(Experiment):
     def analyze(self, data):
         return json.dumps(
             {
+                "average_payoff": self.average_payoff(data),
                 "average_score": self.average_score(data),
+                "number_of_actions": self.number_of_actions(data),
+                "average_time_to_start": self.average_time_to_start(data),
             }
         )
 
@@ -2530,21 +2106,6 @@ class Griduniverse(Experiment):
         scores = [player["score"] for player in players]
         return float(sum(scores)) / len(scores)
 
-    #Line Edited Save DF
-    def save_data_to_file(self, data, filename):
-        df = data.infos.df
-        df.to_csv(filename, index=False)
-    
-        # Open the same file in append mode
-        with open(filename, 'a') as file:
-            # Write a new line for separation
-            file.write('\n')
-        
-            # Write questions data to the same file
-            questions_df = data.questions.df
-            questions_df.to_csv(file, index=False, header=False)
-
-
     def _last_state_for_player(self, player_id):
         most_recent_grid_state = self.environment.state()
         if most_recent_grid_state is not None:
@@ -2564,5 +2125,3 @@ class Griduniverse(Experiment):
         )
 
         return finished_count >= self.initial_recruitment_size
-
-
