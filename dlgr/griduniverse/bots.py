@@ -199,6 +199,11 @@ class BaseGridUniverseBot(BotBase):
         """Classes inheriting from this must override this method to provide the logic to
         determine what their next action should be"""
         raise NotImplementedError
+    
+    def reset_bot(self):
+        """Classes inheriting from this must override this method to provide the logic to
+        reset the bot's state."""
+        raise NotImplementedError
 
     def get_expected_position(self, key):
         """Predict future state given an action.
@@ -1145,6 +1150,18 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         self.n_row = config.get("rows")
         self.visibility = config.get("visibility")
         self.game_config_loaded = True
+
+    def reset_bot(self):
+        self.player_probabilities = {}
+        self.initialized_probabilities = False
+        self.iterations = 0
+        self.previous_player_positions = {}
+        self.initialized_belief = False
+        self.belief = {}
+        self.idx2animal = {}
+        self.team_goal = {'hare': 0.5, 'stag': 0.5}
+        self.num_stag = 0
+        self.num_hare = 0
     
     def initialize_probabilities(self):
         """Initializes the probabilities for all players going for each animal."""
@@ -1445,8 +1462,13 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             if max_prob != min_prob:  
                 all_probs_equal = False  
                 best_index = probabilities.index(max_prob)
-                best_targets[player_id] = (animal_types[best_index], best_index)
-                logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+                try:
+                    best_targets[player_id] = (animal_types[best_index], best_index)
+                    logger.info(f"Player {player_id} is going for {animal_types[best_index]} at index {best_index} with probability {max_prob}")
+                except IndexError:
+                    self.reset_bot()
+                    logger.error(f"Resetting bot")
+                    return None
 
         if all_probs_equal:
             #logger.info("All probabilities are equal; bot will stay in place.")

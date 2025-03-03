@@ -16,7 +16,7 @@ bot_policy = PartialObsGeneralizedProbabilisticBot
 
 [Game Parameters]
 max_participants = 2
-num_rounds = 2
+num_rounds = 3
 goal_items = 3
 num_cook = 2
 player_overlap = true
@@ -24,8 +24,8 @@ walls_density = 0
 cook_time = 15
 time_per_round = 2
 game_over_cond = time
-hare_count_after_new_round = 5
-stag_count_after_new_round = 2
+hare_count_after_new_round = 4
+stag_count_after_new_round = 1
 
 [Docker]
 [docker_image_base_name = ghcr.io/lucaslinzmeier/dallinger-griduniverse/griduniverse] 
