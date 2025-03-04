@@ -1456,6 +1456,9 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
         animal_types = [animal_id for animal_id, _ in self.animal_positions]  
         best_targets = {}
         all_probs_equal = True
+
+        if len(animal_types) == 1:
+            return 0
         
         for player_id, probabilities in self.player_probabilities.items():
             if player_id == 1:

@@ -310,6 +310,7 @@ class Gridworld(object):
         self.players = {}
         self.item_locations = {}
         self.items_consumed = []
+        self.total_items = 0
 
         #LINE EDITED ROUND LOGIC
         self.num_items_consumed = 0
@@ -478,27 +479,28 @@ class Gridworld(object):
         if not self.game_started:
             return
 
-        total_items = self.hare_count + self.stag_count
-
-        if not self.remaining_round_time or self.num_items_consumed >= total_items:
+        
+        if not self.remaining_round_time or self.num_items_consumed >= self.total_items:
             self.round += 1
             self.num_items_consumed = 0
             
             if self.game_over:
                 return
 
-            # Reseta a lógica de round
             # DESPAWN all items, put a blank back in player inventory and respawn 
             # To correctly update the item count ("hare" and "stag"), you have to update the config.txt AND the game_config.yml.
             # The game_config.yml is used to set the initial item count, and the config.txt is used to update the item count after each round.
 
             self.item_locations = {}
+            self.total_items = 0
 
             if self.round != 0:
                 for _ in range(self.hare_count):
                     self.spawn_item(item_id="hare")
+                    self.total_items += 1
                 for _ in range(self.stag_count):
                     self.spawn_item(item_id="stag")
+                    self.total_items += 1
                 
                 self.items_updated = True
 
@@ -759,7 +761,7 @@ class Gridworld(object):
                 self.items_consumed.append(item)
 
                 #LINE EDITED ROUND LOGIC
-                self.num_items_consumed += 1
+                # self.num_items_consumed += 1
 
                 self.items_updated = True
                 if item.respawn:
@@ -1851,7 +1853,7 @@ class Griduniverse(Experiment):
             self.grid.items_consumed.append(player_item)
 
             #LINE EDITED ROUND LOGIC
-            self.grid.num_items_consumed += 1
+            # self.grid.num_items_consumed += 1
 
             player.current_item = None
 
@@ -2025,6 +2027,7 @@ class Griduniverse(Experiment):
                     if (i % 250) == 0:
                         gevent.sleep(0.00001)
                     self.grid.spawn_item(item_id=item_type["item_id"])
+                    self.grid.total_items += 1
 
         while not self.grid.game_started:
             gevent.sleep(0.01)
