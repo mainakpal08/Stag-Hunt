@@ -1914,148 +1914,38 @@ class Griduniverse(Experiment):
         del self.grid.item_locations[position]
         player.current_item = location_item
         self.grid.items_updated = True
-
+   
     def handle_item_transition(self, msg):
         player = self.grid.players[msg["player_id"]]
-        player_item = player.current_item
         position = tuple(msg["position"])
         location_item = self.grid.item_locations.get(position)
-        transition = None
-
-        actor_key = player_item and player_item.item_id
-        target_key = location_item and location_item.item_id
-        transition_key = (actor_key, target_key)
-        # If the target item has only 1 remaining use, then we try to find a
-        # `last_use` transition
-        if location_item and location_item.remaining_uses == 1:
-            last_trans_key = ("last",) + transition_key
-            transition = self.transition_config.get(last_trans_key)
-        # If we didn't find or need one, we look up the standard key
-        if transition is None:
-            transition = self.transition_config.get(transition_key)
-
-        #LINE EDITED NEIGHBORS - 
-        required_actors = transition and transition.get("required_actors", 0)
-        neighbors = player.neighbors()
-
-        '''if transition is None:
-            error_msg = {
-                "type": "action_error",
-                "player_id": player.id,
-                "position": list(position),
-                "item": location_item and location_item.serialize(),
-                "player_item": player_item and player_item.serialize(),
-            }
-            self.publish(error_msg)
-            return'''
-
-        if (transition is None) or (
-            required_actors and len(neighbors) + 1 < required_actors
-        ):
-            error_msg = {
-                "type": "action_error",
-                "player_id": player.id,
-                "position": list(position),
-                "item": location_item and location_item.serialize(),
-                "player_item": player_item and player_item.serialize(),
-            }
-            self.publish(error_msg)
+        
+        if not location_item or location_item.item_id not in {"hare", "stag"}:
             return
-
+        
+        transition = self.transition_config.get((player.current_item and player.current_item.item_id, location_item.item_id))
+        if not transition:
+            return
+        
+        required_actors = transition.get("required_actors", 0)
+        neighbors = player.neighbors()
         if required_actors and len(neighbors) + 1 < required_actors:
-            other_player_item = null
-            for other_player in neighbors:
-                    other_player._item = other_player.current_item
-            
-            if other_player_item.id != "blank":
-                error_msg = {
-                    "type": "action_error",
-                    "player_id": player.id,
-                    "position": list(position),
-                    "item": location_item and location_item.serialize(),
-                    "player_item": player_item and player_item.serialize(),
-                }
-                self.publish(error_msg)
-                return
-        #Line Edited Database storage
-        msg = {
-            "type": "item_transition_info",
-            "player_id": player.id,
-            "item": location_item and location_item.serialize(),
-        }
-
-        #Line Edited Database storage
-        self.grid.log_event(msg)
-
-        # these values may be positive or negative, so we may add or remove uses
-        modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
-        if player_item and player_item.remaining_uses:
-            player_item.remaining_uses += modify_actor_uses
-        if location_item and location_item.remaining_uses:
-            location_item.remaining_uses += modify_target_uses
-
-        # An item that is replaced or has no remaining uses has been "consumed"
-        if player_item and (
-            (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
-        ):
-            self.grid.items_consumed.append(player_item)
-
-            #LINE EDITED ROUND LOGIC
-            self.grid.num_items_consumed += 1
-
-            #Line EDITED NEIGHBORS
-            if transition.get("required_actors") == 2:
-                self.grid.num_items_consumed += 1
-
-
-            player.current_item = None
-            self.grid.items_updated = True
-        if location_item and (
-            (location_item.remaining_uses < 1) or transition["target_end"] != target_key
-        ):
+            return
+        
+        transition_calories = transition.get("calories", 0)
+        per_player = transition_calories // (len(neighbors) + 1)
+        for other_player in neighbors:
+            other_player.score += per_player
+        player.score += per_player + (transition_calories % (len(neighbors) + 1))
+        
+        if location_item.remaining_uses:
+            location_item.remaining_uses -= 1
+        if location_item.remaining_uses < 1:
             del self.grid.item_locations[position]
-            self.grid.items_consumed.append(location_item)
-
-            #LINE EDITED ROUND LOGIC
             self.grid.num_items_consumed += 1
+        
+        self.grid.items_updated = True
 
-
-            self.grid.items_updated = True
-
-        # The player's item type has changed
-        if transition["actor_end"] != actor_key:
-            new_player_item = Item(
-                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                item_config=self.item_config[transition["actor_end"]],
-            )
-            player.current_item = new_player_item
-            self.grid.items_updated = True
-
-        # The location's item type has changed
-        if transition["target_end"] != target_key:
-            new_target_item = Item(
-                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                position=position,
-                item_config=self.item_config[transition["target_end"]],
-            )
-            self.grid.item_locations[position] = new_target_item
-            self.grid.items_updated = True
-
-        #LINE EDITED NEIGHBORS -
-        # Possibly distribute calories to participating players
-        transition_calories = transition.get("calories")
-        # self.grid.update_team_score()
-    
-        if transition_calories:
-            per_player = transition_calories // (len(neighbors) + 1)
-            for other_player in neighbors:
-                other_player.score += per_player
-            player.score += per_player
-            player.score += transition_calories % (len(neighbors) + 1)
-
-
-
-            #LINE EDITED NEIGHBORS - 
         
 
     def handle_item_drop(self, msg):

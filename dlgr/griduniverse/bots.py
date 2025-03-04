@@ -381,6 +381,9 @@ class HighPerformanceBaseGridUniverseBot(HighPerformanceBotBase, BaseGridUnivers
         same as the one the browser Javascript would have sent"""
         key = self.get_next_key()
         message = {}
+
+        position = self.my_position
+
         if key == Keys.UP:
             message = {
                 "type": "move",
@@ -405,13 +408,13 @@ class HighPerformanceBaseGridUniverseBot(HighPerformanceBotBase, BaseGridUnivers
                 "player_id": self.participant_id,
                 "move": "right",
             }
-        # elif key == Keys.SPACE:
-        #     message = {
-        #         "type": "item_consume",
-        #         "player_id": self.participant_id,
-        #     }
+        elif key == Keys.SPACE:
+            message = {
+                "type": "item_transition",
+                "player_id": self.participant_id,
+                "position": position
+            }
 
-        # logger.info("Sending message: " + json.dumps(message))
         
         if message:
             self.publish(message)
@@ -1613,7 +1616,7 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             logger.info(f"Animal positions changed; resetting bot.")
             return None
         
-        if self.iterations < 3:
+        if self.iterations < 1:
             self.iterations += 1
             return None
         if not self.game_config_loaded:

@@ -183,6 +183,7 @@ items:
     portable: false
     spawn_rate: 0
     item_count: 5
+    n_uses: 1
     sprite: "emoji:🐇"
     calories: 3
 
@@ -193,6 +194,7 @@ items:
     portable: false
     spawn_rate: 0
     item_count: 2
+    n_uses: 1
     sprite: "emoji:🦌"
     calories: 8
 
@@ -214,56 +216,26 @@ items:
     item_count: 0
     sprite: "emoji:🥧"
 
-  
-
-  - crossable: true
-    interactive: true
-    name: Oven
-    item_id: oven
-    portable: false
-    spawn_rate: 0
-    item_count: 0
-    sprite: "image:sprites/oven.png"
-
-  - crossable: true
-    interactive: true
-    name: Oven is Baking
-    item_id: oven_with_pie
-    portable: false
-    spawn_rate: 0
-    item_count: 0
-    sprite: "image:sprites/ovenwithpie.png"
-
-  - crossable: true
-    interactive: true
-    name: Pie
-    item_id: pie
-    portable: true
-    spawn_rate: 0
-    item_count: 0
-    sprite: "emoji:🥧"
 
 transitions:
-  
   - actor_start: blank
-    actor_end: consumed
+    actor_end: blank
     target_start: hare
-    target_end: hare
+    target_end: null  
     visible: always
     calories: 3
-    last_use: false
+    modify_uses:
+      - 0
+      - -1
+
+  - actor_start: blank
+    actor_end: blank
+    required_actors: 2
+    target_start: stag
+    target_end: stag 
+    visible: always
+    calories: 8
     modify_uses:
       - 0
       - 0
 
-  - actor_start: blank
-    actor_end: consumed
-    required_actors: 2
-    target_start: stag
-    target_end: stag
-    visible: always
-    calories: 8
-    last_use: false
-    modify_uses:
-      - 0
-      - 0
