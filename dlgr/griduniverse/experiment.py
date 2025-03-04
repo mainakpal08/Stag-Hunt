@@ -267,6 +267,7 @@ class Gridworld(object):
         self.leaderboard_group = kwargs.get("leaderboard_group", False)
         self.leaderboard_individual = kwargs.get("leaderboard_individual", False)
         self.leaderboard_time = kwargs.get("leaderboard_time", 0)
+        self.team_score = 0
 
         # Donations
         self.donation_amount = kwargs.get("donation_amount", 0)
@@ -410,26 +411,25 @@ class Gridworld(object):
 
     @property
     def remaining_round_time(self):
-        '''
         if self.start_timestamp is None:
             return 0
         raw_remaining = self.time_per_round - self.elapsed_round_time
 
-        return max(0, raw_remaining)'''
-
-        #LINE EDITED ROUND LOGIC -
-        if self.start_timestamp is None:
-            return 0
-
-        elap = 0
-
-        if self.items_consumed is None:
-            elap = 0
-        else: elap = self.num_items_consumed
-        
-        raw_remaining = self.time_per_round - elap
-
         return max(0, raw_remaining)
+
+        # #LINE EDITED ROUND LOGIC -
+        # if self.start_timestamp is None:
+        #     return 0
+
+        # elap = 0
+
+        # if self.items_consumed is None:
+        #     elap = 0
+        # else: elap = self.num_items_consumed
+        
+        # raw_remaining = self.time_per_round - elap
+
+        # return max(0, raw_remaining)
 
         #LINE EDITED ROUND LOGIC -
 
@@ -496,7 +496,7 @@ class Gridworld(object):
 
         if not self.remaining_round_time:
             self.round += 1
-
+            """
             #Line Edited Round Logic
             msg = {
             "type": "round_end",
@@ -508,7 +508,7 @@ class Gridworld(object):
 
             #LINE EDITED ROUND LOGIC
             self.num_items_consumed = 0
-
+            """
             if self.game_over:
                 return
 
@@ -646,6 +646,7 @@ class Gridworld(object):
             "donation_active": self.donation_active,
             "rows": self.rows,
             "columns": self.columns,
+            "team_score": self.team_score,
             #LINE EDITED CONDITIONS
             "chat_visible": self.show_chatroom,
             #LINE EDITED CONDITIONS
@@ -804,11 +805,17 @@ class Gridworld(object):
 
                 player.score += calories
                 consumed += 1
+        
+        #LINE EDITED ROUND LOGIC
+        self.update_team_score()
 
         if consumed and item.public_good:
             for player_to in self.players.values():
                 player_to.score += item.public_good * consumed
-    
+
+    def update_team_score(self):
+        self.team_score = sum(p.score for p in self.players.values())
+
     def cook(self):
         """Players need to put self.num_cook items in the oven to make 1 new food. 
         The oven takes cook_time seconds to finish."""
@@ -1979,91 +1986,74 @@ class Griduniverse(Experiment):
 
         #Line Edited Database storage
         self.grid.log_event(msg)
-        
 
-        
-        #Line EDITED NEIGHBORS - 
-        
-        # The item is being put in the oven
-        if transition["target_start"] == "oven":
-            num_pies = self.grid.items_cooked
-            if not self.grid.oven_in_use:
-                player.current_item = None
-                self.grid.cook()
+        # these values may be positive or negative, so we may add or remove uses
+        modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
+        if player_item and player_item.remaining_uses:
+            player_item.remaining_uses += modify_actor_uses
+        if location_item and location_item.remaining_uses:
+            location_item.remaining_uses += modify_target_uses
 
-            if self.grid.items_cooked != num_pies:
-                new_oven = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    position=position,
-                    item_config=self.item_config["oven_with_pie"],
-                )
-                self.grid.item_locations[position] = new_oven
-                self.grid.items_updated = True
+        # An item that is replaced or has no remaining uses has been "consumed"
+        if player_item and (
+            (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
+        ):
+            self.grid.items_consumed.append(player_item)
 
-        else:
-            # these values may be positive or negative, so we may add or remove uses
-            modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
-            if player_item and player_item.remaining_uses:
-                player_item.remaining_uses += modify_actor_uses
-            if location_item and location_item.remaining_uses:
-                location_item.remaining_uses += modify_target_uses
+            #LINE EDITED ROUND LOGIC
+            self.grid.num_items_consumed += 1
 
-            # An item that is replaced or has no remaining uses has been "consumed"
-            if player_item and (
-                (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
-            ):
-                self.grid.items_consumed.append(player_item)
-
-                #LINE EDITED ROUND LOGIC
-                self.grid.num_items_consumed += 1
-
-                #Line EDITED NEIGHBORS
-                if transition.get("required_actors") == 2:
-                    self.grid.num_items_consumed += 1
-
-
-                player.current_item = None
-                self.grid.items_updated = True
-            if location_item and (
-                (location_item.remaining_uses < 1) or transition["target_end"] != target_key
-            ):
-                del self.grid.item_locations[position]
-                self.grid.items_consumed.append(location_item)
-
-                #LINE EDITED ROUND LOGIC
+            #Line EDITED NEIGHBORS
+            if transition.get("required_actors") == 2:
                 self.grid.num_items_consumed += 1
 
 
-                self.grid.items_updated = True
+            player.current_item = None
+            self.grid.items_updated = True
+        if location_item and (
+            (location_item.remaining_uses < 1) or transition["target_end"] != target_key
+        ):
+            del self.grid.item_locations[position]
+            self.grid.items_consumed.append(location_item)
 
-            # The player's item type has changed
-            if transition["actor_end"] != actor_key:
-                new_player_item = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    item_config=self.item_config[transition["actor_end"]],
-                )
-                player.current_item = new_player_item
-                self.grid.items_updated = True
+            #LINE EDITED ROUND LOGIC
+            self.grid.num_items_consumed += 1
 
-            # The location's item type has changed
-            if transition["target_end"] != target_key:
-                new_target_item = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    position=position,
-                    item_config=self.item_config[transition["target_end"]],
-                )
-                self.grid.item_locations[position] = new_target_item
-                self.grid.items_updated = True
 
-            #LINE EDITED NEIGHBORS -
-            # Possibly distribute calories to participating players
-            transition_calories = transition.get("calories")
-            if transition_calories:
-                per_player = transition_calories // (len(neighbors) + 1)
-                for other_player in neighbors:
-                    other_player.score += per_player
-                player.score += per_player
-                player.score += transition_calories % (len(neighbors) + 1)
+            self.grid.items_updated = True
+
+        # The player's item type has changed
+        if transition["actor_end"] != actor_key:
+            new_player_item = Item(
+                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
+                item_config=self.item_config[transition["actor_end"]],
+            )
+            player.current_item = new_player_item
+            self.grid.items_updated = True
+
+        # The location's item type has changed
+        if transition["target_end"] != target_key:
+            new_target_item = Item(
+                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
+                position=position,
+                item_config=self.item_config[transition["target_end"]],
+            )
+            self.grid.item_locations[position] = new_target_item
+            self.grid.items_updated = True
+
+        #LINE EDITED NEIGHBORS -
+        # Possibly distribute calories to participating players
+        transition_calories = transition.get("calories")
+        # self.grid.update_team_score()
+    
+        if transition_calories:
+            per_player = transition_calories // (len(neighbors) + 1)
+            for other_player in neighbors:
+                other_player.score += per_player
+            player.score += per_player
+            player.score += transition_calories % (len(neighbors) + 1)
+
+
 
             #LINE EDITED NEIGHBORS - 
         

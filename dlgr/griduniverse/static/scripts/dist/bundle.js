@@ -21489,6 +21489,7 @@
     this.motion_speed_limit = settings.motion_speed_limit;
     this.motion_timestamp = settings.motion_timestamp;
     this.score = settings.score;
+    this.team_score = settings.team_score;
     this.payoff = settings.payoff;
     this.name = settings.name;
     this.identity_visible = settings.identity_visible;

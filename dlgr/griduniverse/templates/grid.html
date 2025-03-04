@@ -63,9 +63,8 @@
 <div id="dashboard">
     <p>
         Player Score: <span id="score">0</span> points |  
-        <!-- Team Score: <span id="team-score">0</span> points   -->
+        Team Score: <span id="team_score">{{ experiment.grid.team_score }}</span> points
     </p>
-
     <p>
         <span id="time">?</span> seconds remaining for this round.
         {% if experiment.grid.num_rounds > 1 %}

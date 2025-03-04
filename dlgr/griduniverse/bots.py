@@ -35,7 +35,7 @@ class BaseGridUniverseBot(BotBase):
 
     MEAN_KEY_INTERVAL = 1 #Theerage number of seconds between key presses
     MAX_KEY_INTERVAL = 15   #: The maximum number of seconds between key presses
-    END_BUFFER_SECONDS = 120  #: Seconds to wait after expected game end before giving up
+    END_BUFFER_SECONDS = 160  #: Seconds to wait after expected game end before giving up
 
     def complete_questionnaire(self):
         """Complete the standard debriefing form randomly."""
