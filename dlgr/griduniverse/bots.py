@@ -33,7 +33,7 @@ class BaseGridUniverseBot(BotBase):
     """A base class for GridUniverse bots that implements experiment
     specific helper functions and runs under Selenium"""
 
-    MEAN_KEY_INTERVAL = 1 #Theerage number of seconds between key presses
+    MEAN_KEY_INTERVAL = 0.5 #Theerage number of seconds between key presses
     MAX_KEY_INTERVAL = 15   #: The maximum number of seconds between key presses
     END_BUFFER_SECONDS = 160  #: Seconds to wait after expected game end before giving up
 
@@ -1616,9 +1616,10 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             logger.info(f"Animal positions changed; resetting bot.")
             return None
         
-        if self.iterations < 1:
-            self.iterations += 1
-            return None
+        # if self.iterations < 1:
+        #     self.iterations += 1
+        #     return None
+        
         if not self.game_config_loaded:
             self.load_game_config()
         if not self.initialized_belief:

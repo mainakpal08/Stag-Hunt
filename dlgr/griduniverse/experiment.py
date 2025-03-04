@@ -417,22 +417,6 @@ class Gridworld(object):
 
         return max(0, raw_remaining)
 
-        # #LINE EDITED ROUND LOGIC -
-        # if self.start_timestamp is None:
-        #     return 0
-
-        # elap = 0
-
-        # if self.items_consumed is None:
-        #     elap = 0
-        # else: elap = self.num_items_consumed
-        
-        # raw_remaining = self.time_per_round - elap
-
-        # return max(0, raw_remaining)
-
-        #LINE EDITED ROUND LOGIC -
-
     @property
     def group_donation_enabled(self):
         return self.donation_group or self.donation_ingroup
@@ -494,44 +478,32 @@ class Gridworld(object):
         if not self.game_started:
             return
 
-        if not self.remaining_round_time:
+        total_items = self.hare_count + self.stag_count
+
+        if not self.remaining_round_time or self.num_items_consumed >= total_items:
             self.round += 1
-            """
-            #Line Edited Round Logic
-            msg = {
-            "type": "round_end",
-            "round": self.round -1,
-            }
-
-            #Line Edited Database storage
-            self.log_event(msg)
-
-            #LINE EDITED ROUND LOGIC
             self.num_items_consumed = 0
-            """
+            
             if self.game_over:
                 return
 
-            #LINE EDITED ROUND LOGIC -
+            # Reseta a lógica de round
             # DESPAWN all items, put a blank back in player inventory and respawn 
             # To correctly update the item count ("hare" and "stag"), you have to update the config.txt AND the game_config.yml.
             # The game_config.yml is used to set the initial item count, and the config.txt is used to update the item count after each round.
 
-            #DESPAWN
             self.item_locations = {}
 
-            if(self.round != 0):
+            if self.round != 0:
                 for _ in range(self.hare_count):
-                    self.spawn_item(item_id = "hare")
+                    self.spawn_item(item_id="hare")
                 for _ in range(self.stag_count):
-                    self.spawn_item(item_id = "stag")
-            
+                    self.spawn_item(item_id="stag")
+                
                 self.items_updated = True
 
-            #Blank in player inventory
             for player in self.players.values():
 
-                #Spawn the player with a blank item
                 item_props = self.item_config["blank"]
 
                 new_item = Item(
@@ -541,15 +513,14 @@ class Gridworld(object):
 
                 player.current_item = new_item
 
-            #LINE EDITED ROUND LOGIC -
-
-
             self.start_timestamp = time.time()
-            # Delay round for leaderboard display
+
             if self.leaderboard_individual or self.leaderboard_group:
                 self.start_timestamp += self.leaderboard_time
+
             for player in self.players.values():
                 player.motion_timestamp = 0
+
 
     def compute_payoffs(self):
         """Compute payoffs from scores.
