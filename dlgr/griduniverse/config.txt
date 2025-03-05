@@ -16,7 +16,7 @@ bot_policy = PartialObsGeneralizedProbabilisticBot
 
 [Game Parameters]
 max_participants = 2
-num_rounds = 3
+num_rounds = 1
 goal_items = 3
 num_cook = 2
 player_overlap = true

@@ -182,7 +182,7 @@ items:
     item_id: hare
     portable: false
     spawn_rate: 0
-    item_count: 1
+    item_count: 4
     n_uses: 1
     sprite: "emoji:🐇"
     calories: 3
@@ -193,7 +193,7 @@ items:
     item_id: stag
     portable: false
     spawn_rate: 0
-    item_count: 1
+    item_count: 2
     n_uses: 1
     sprite: "emoji:🦌"
     calories: 8
@@ -221,12 +221,12 @@ transitions:
   - actor_start: blank
     actor_end: blank
     target_start: hare
-    target_end: null  
+    target_end: hare
     visible: always
     calories: 3
     modify_uses:
       - 0
-      - -1
+      - 0
 
   - actor_start: blank
     actor_end: blank
