@@ -22528,6 +22528,11 @@
     if (! _.isUndefined(ego)) {
       $("#score").html(Math.round(ego.score));
       $("#dollars").html(ego.payoff.toFixed(2));
+
+      if (!_.isUndefined(state.team_score)) {
+        $("#team_score").html(Math.round(state.team_score));
+      }
+
       window.state = msg.grid;
       window.ego = ego.id;
       if (settings.donation_active &&

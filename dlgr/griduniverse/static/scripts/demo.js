@@ -178,6 +178,7 @@ var Player = function (settings, dimness) {
   this.motion_direction = settings.motion_direction;
   this.motion_speed_limit = settings.motion_speed_limit;
   this.motion_timestamp = settings.motion_timestamp;
+  this.team_score = settings.team_score;
   this.score = settings.score;
   this.payoff = settings.payoff;
   this.name = settings.name;

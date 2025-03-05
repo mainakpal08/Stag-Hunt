@@ -267,7 +267,7 @@ class Gridworld(object):
         self.leaderboard_group = kwargs.get("leaderboard_group", False)
         self.leaderboard_individual = kwargs.get("leaderboard_individual", False)
         self.leaderboard_time = kwargs.get("leaderboard_time", 0)
-        self.team_score = 0
+        self.team_score = 10
 
         # Donations
         self.donation_amount = kwargs.get("donation_amount", 0)
@@ -1238,6 +1238,7 @@ class Player(object):
             "id": self.id,
             "position": self.position,
             "score": self.score,
+            "team_score": self.grid.team_score,
             "payoff": self.payoff,
             "color": self.color,
             "motion_auto": self.motion_auto,
@@ -1918,6 +1919,7 @@ class Griduniverse(Experiment):
             self.grid.num_items_consumed += 1
         
         self.grid.items_updated = True
+        self.grid.update_team_score()
 
         
 
