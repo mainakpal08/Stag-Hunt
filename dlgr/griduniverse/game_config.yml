@@ -182,7 +182,7 @@ items:
     item_id: hare
     portable: false
     spawn_rate: 0
-    item_count: 4
+    item_count: 5
     n_uses: 1
     sprite: "emoji:🐇"
     calories: 3

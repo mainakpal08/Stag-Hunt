@@ -5,26 +5,26 @@ recruiter = multi
 recruiters = bots: 1, cli: 2
 network = FullyConnected
 block_size = 25
-columns = 25
-rows = 25
-window_rows = 25
-window_columns = 25
+columns = 20
+rows = 20
+window_rows = 20
+window_columns = 20
 use_identicons = true
 background_animation = true
-visibility = 25
+visibility = 10
 bot_policy = PartialObsGeneralizedProbabilisticBot
 
 [Game Parameters]
-max_participants = 2
-num_rounds = 1
+max_participants = 3
+num_rounds = 3
 goal_items = 3
 num_cook = 2
 player_overlap = true
 walls_density = 0
 cook_time = 15
-time_per_round = 60
+time_per_round = 120
 game_over_cond = time
-hare_count_after_new_round = 2
+hare_count_after_new_round = 5
 stag_count_after_new_round = 2
 
 [Docker]

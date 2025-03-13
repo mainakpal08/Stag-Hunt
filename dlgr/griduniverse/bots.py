@@ -1619,9 +1619,9 @@ class PartialObsGeneralizedProbabilisticBot(HighPerformanceBaseGridUniverseBot):
             logger.info(f"Animal positions changed; resetting bot.")
             return None
         
-        # if self.iterations < 1:
-        #     self.iterations += 1
-        #     return None
+        if self.iterations < 3:
+            self.iterations += 1
+            return None
         
         if not self.game_config_loaded:
             self.load_game_config()
