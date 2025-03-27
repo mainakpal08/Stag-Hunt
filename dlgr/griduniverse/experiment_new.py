@@ -90,6 +90,10 @@ GU_PARAMS = {
     "walls_density": float,
     "walls_contiguity": float,
     "walls_visible": bool,
+    "goal_items": int,
+    "num_cook": int,
+    "cook_time": int,
+    "game_over_cond": unicode,
     "initial_score": int,
     "dollars_per_point": float,
     "tax": float,
@@ -122,6 +126,8 @@ GU_PARAMS = {
     "donation_multiplier": float,
     "num_recruits": int,
     "state_interval": float,
+    "hare_count_after_new_round": int,
+    "stag_count_after_new_round": int,
 }
 
 DEFAULT_ITEM_CONFIG = {
@@ -171,27 +177,55 @@ class Gridworld(object):
         [0.77, 0.96, 0.90],
     ]
 
+    GREEN = [0.51, 0.69, 0.61]
+    WHITE = [1.00, 1.00, 1.00]
+    
     wall_locations = None
     item_locations = None
     walls_updated = True
     items_updated = True
 
+    def __new__(cls, **kwargs):
+        if not hasattr(cls, "instance"):
+            cls.instance = super(Gridworld, cls).__new__(cls)
+        return cls.instance
+
     def __init__(self, **kwargs):
+        # If Singleton is already initialized, do nothing
+        if hasattr(self, "num_players"):
+            return
+
         self.log_event = kwargs.get("log_event", lambda x: None)
+
+        #Line edited
+        self.prolific_assignment_id = ""
 
         # Players
         self.num_players = kwargs.get("max_participants", 3)
-        # Minimum quorum for game defaults to max nubmer of players per game,
-        # and cannot exceed that number
         self.quorum = min(kwargs.get("game_quorum", self.num_players), self.num_players)
+
 
         # Rounds
         self.num_rounds = kwargs.get("num_rounds", 1)
         self.time_per_round = kwargs.get("time_per_round", 300)
 
+        # Instructions
+        self.instruct = kwargs.get("instruct", True)
+
         # Grid
         self.columns = kwargs.get("columns", 25)
         self.rows = kwargs.get("rows", 25)
+        self.window_columns = kwargs.get("window_columns", min(self.columns, 25))
+        self.window_rows = kwargs.get("window_rows", min(self.rows, 25))
+        self.block_size = kwargs.get("block_size", 10)
+        self.padding = kwargs.get("padding", 1)
+        self.chat_visibility_threshold = kwargs.get("chat_visibility_threshold", 0.4)
+        self.spatial_chat = kwargs.get("spatial_chat", False)
+
+        # EDITED
+        self.visibility = kwargs.get("visibility", 40)
+        self.visibility_ramp_time = kwargs.get("visibility_ramp_time", 4)
+        self.background_animation = kwargs.get("background_animation", True)
         self.player_overlap = kwargs.get("player_overlap", False)
 
         # Motion
@@ -200,25 +234,41 @@ class Gridworld(object):
         self.motion_cost = kwargs.get("motion_cost", 0)
         self.motion_tremble_rate = kwargs.get("motion_tremble_rate", 0)
 
+        # Components
+
+        self.show_chatroom = kwargs.get("show_chatroom", True)
+
+
+        self.others_visible = kwargs.get("others_visible", True)
+
+
+
+        self.show_grid = kwargs.get("show_grid", True)
+
         # Identity
         self.num_colors = kwargs.get("num_colors", 3)
+        self.mutable_colors = kwargs.get("mutable_colors", False)
         self.costly_colors = kwargs.get("costly_colors", False)
+        self.pseudonyms = kwargs.get("pseudonyms", True)
         self.pseudonyms_locale = kwargs.get("pseudonyms_locale", "en_US")
         self.pseudonyms_gender = kwargs.get("pseudonyms_gender", None)
         self.contagion = kwargs.get("contagion", 0)
         self.contagion_hierarchy = kwargs.get("contagion_hierarchy", False)
         self.identity_signaling = kwargs.get("identity_signaling", False)
         self.identity_starts_visible = kwargs.get("identity_starts_visible", False)
+        self.use_identicons = kwargs.get("use_identicons", True)
 
         # Walls
+        self.walls_visible = kwargs.get("walls_visible", True)
         self.walls_density = kwargs.get("walls_density", 0.0)
         self.walls_contiguity = kwargs.get("walls_contiguity", 1.0)
+        self.build_walls = kwargs.get("build_walls", False)
         self.wall_building_cost = kwargs.get("wall_building_cost", 0)
         self.wall_locations = {}
 
         # Payoffs
         self.initial_score = kwargs.get("initial_score", 0)
-        self.dollars_per_point = kwargs.get("dollars_per_point", 0.02)
+        self.dollars_per_point = kwargs.get("dollars_per_point", 0) # Change for reward
         self.tax = kwargs.get("tax", 0.00)
         self.relative_deprivation = kwargs.get("relative_deprivation", 1)
         self.frequency_dependence = kwargs.get("frequency_dependence", 0)
@@ -228,6 +278,7 @@ class Gridworld(object):
         self.leaderboard_group = kwargs.get("leaderboard_group", False)
         self.leaderboard_individual = kwargs.get("leaderboard_individual", False)
         self.leaderboard_time = kwargs.get("leaderboard_time", 0)
+        self.team_score = 0
 
         # Donations
         self.donation_amount = kwargs.get("donation_amount", 0)
@@ -238,6 +289,7 @@ class Gridworld(object):
         self.donation_public = kwargs.get("donation_public", False)
         self.intergroup_competition = kwargs.get("intergroup_competition", 1)
         self.intragroup_competition = kwargs.get("intragroup_competition", 1)
+        self.score_visible = kwargs.get("score_visible", False)
         self.alternate_consumption_donation = kwargs.get(
             "alternate_consumption_donation", False
         )
@@ -251,12 +303,36 @@ class Gridworld(object):
         self.difi_group_image = kwargs.get(
             "difi_group_image", "/static/images/group.jpg"
         )
+        self.fun_survey = kwargs.get("fun_survey", False)
+        self.pre_difi_question = kwargs.get("pre_difi_question", False)
+        self.pre_difi_group_label = kwargs.get("pre_difi_group_label", "Group")
+        self.pre_difi_group_image = kwargs.get(
+            "pre_difi_group_image", "/static/images/group.jpg"
+        )
+        self.leach_survey = kwargs.get("leach_survey", False)
+
+        # Collab parameters
+        self.goal_items = kwargs.get("goal_items", 100)
+        self.num_cook = kwargs.get("num_cook", 1)
+        self.cook_time = kwargs.get("cook_time", 0)
+        self.game_over_cond = kwargs.get("game_over_cond", "time")
 
         # Set some variables.
         self.players = {}
         self.item_locations = {}
         self.items_consumed = []
+        self.total_items = 0
+
+        #LINE EDITED ROUND LOGIC
+        self.num_items_consumed = 0
+
+        self.items_cooked = []
+        self.items_cooking = 0
+        self.oven_in_use = False
+        self.oven_time_left = 0
         self.start_timestamp = kwargs.get("start_timestamp", None)
+        self.hare_count = kwargs.get("hare_count_after_new_round", 0)
+        self.stag_count = kwargs.get("stag_count_after_new_round", 0)
 
         self.round = 0
 
@@ -330,6 +406,14 @@ class Gridworld(object):
         if self.player_overlap:
             return not self.has_wall(position)
         return not self.has_player(position) and not self.has_wall(position)
+
+    @property
+    def limited_player_colors(self):
+        return self.player_colors[: self.num_colors]
+
+    @property
+    def limited_player_color_names(self):
+        return self.player_color_names[: self.num_colors]
 
     @property
     def elapsed_round_time(self):
@@ -406,17 +490,50 @@ class Gridworld(object):
         if not self.game_started:
             return
 
-        if not self.remaining_round_time:
+        
+        if not self.remaining_round_time or self.num_items_consumed >= self.total_items:
             self.round += 1
+            self.num_items_consumed = 0
+            
             if self.game_over:
                 return
 
+            # DESPAWN all items, put a blank back in player inventory and respawn 
+            # To correctly update the item count ("hare" and "stag"), you have to update the config.txt AND the game_config.yml.
+            # The game_config.yml is used to set the initial item count, and the config.txt is used to update the item count after each round.
+
+            self.item_locations = {}
+            self.total_items = 0
+
+            if self.round != 0:
+                for _ in range(self.hare_count):
+                    self.spawn_item(item_id="hare")
+                    self.total_items += 1
+                for _ in range(self.stag_count):
+                    self.spawn_item(item_id="stag")
+                    self.total_items += 1
+                
+                self.items_updated = True
+
+            for player in self.players.values():
+
+                item_props = self.item_config["blank"]
+
+                new_item = Item(
+                    id=(len(self.item_locations) + len(self.items_consumed)),
+                    item_config=item_props,
+                )
+
+                player.current_item = new_item
+
             self.start_timestamp = time.time()
-            # Delay round for leaderboard display
+
             if self.leaderboard_individual or self.leaderboard_group:
                 self.start_timestamp += self.leaderboard_time
+
             for player in self.players.values():
                 player.motion_timestamp = 0
+
 
     def compute_payoffs(self):
         """Compute payoffs from scores.
@@ -473,18 +590,6 @@ class Gridworld(object):
             player.payoff *= inter_proportions[player.color_idx]
             player.payoff *= self.dollars_per_point
 
-    def load_map(self, csv_file_path):
-        with open(csv_file_path) as csv_file:
-            grid_state = self.csv_to_grid_state(csv_file)
-        self.deserialize(grid_state)
-
-    def csv_to_grid_state(self, csv_file):
-        from .csv_gridworlds import matrix2gridworld  # avoid circular import
-
-        reader = csv.reader(csv_file)
-        grid_state = matrix2gridworld(list(reader))
-        return grid_state
-
     def build_labyrinth(self):
         if self.walls_density and not self.wall_locations:
             start = time.time()
@@ -502,7 +607,7 @@ class Gridworld(object):
 
     def _start_if_ready(self):
         # Don't start unless we have a least one player
-        if len(self.players) >= self.quorum and not self.game_started:
+        if self.players and not self.game_started:
             self.start_timestamp = time.time()
 
     @property
@@ -511,7 +616,12 @@ class Gridworld(object):
 
     @property
     def game_over(self):
-        return self.round >= self.num_rounds
+        if self.game_over_cond == "time":
+            return self.round >= self.num_rounds
+        elif self.game_over_cond == "foraging":
+            return len(self.items_consumed) == self.goal_items
+        elif self.game_over_cond == "cooking":
+            return len(self.items_cooked) == self.goal_items
 
     def serialize(self, include_walls=True, include_items=True):
         grid_data = {
@@ -520,16 +630,17 @@ class Gridworld(object):
             "donation_active": self.donation_active,
             "rows": self.rows,
             "columns": self.columns,
+            "team_score": self.team_score,
+            #LINE EDITED CONDITIONS
+            "chat_visible": self.show_chatroom,
+            #LINE EDITED CONDITIONS
+            "others_visible": self.others_visible,
         }
 
         if include_walls:
-            grid_data["walls"] = [
-                w.serialize() for w in list(self.wall_locations.values())
-            ]
+            grid_data["walls"] = [w.serialize() for w in self.wall_locations.values()]
         if include_items:
-            grid_data["items"] = [
-                f.serialize() for f in list(self.item_locations.values())
-            ]
+            grid_data["items"] = [f.serialize() for f in self.item_locations.values()]
 
         return grid_data
 
@@ -543,20 +654,18 @@ class Gridworld(object):
                     self.columns,
                 )
             )
-        self.round = state.get("round", 0)
+        self.round = state["round"]
         # @@@ can't set donation_active because it's a property
         # self.donation_active = state['donation_active']
 
         self.players = {}
         for player_state in state["players"]:
-            # Avoid mutating the caller's data
-            new_state = player_state.copy()
-            new_state["color_name"] = new_state.pop("color", None)
+            player_state["color_name"] = player_state.pop("color", None)
             player = Player(
                 pseudonym_locale=self.pseudonyms_locale,
                 pseudonym_gender=self.pseudonyms_gender,
                 grid=self,
-                **new_state,
+                **player_state,
             )
             self.players[player.id] = player
 
@@ -571,13 +680,81 @@ class Gridworld(object):
         if "items" in state:
             self.item_locations = {}
             for item_state in state["items"]:
+                # TODO verify this works at some point!
                 item_props = self.item_config[item_state["item_id"]]
-                invalid_params = ["item_id", "maturity"]
-                item_params = {
-                    k: v for k, v in item_state.items() if k not in invalid_params
-                }
-                obj = Item(item_props, **item_params)
+                obj = Item(item_config=item_props, **item_state)
                 self.item_locations[tuple(obj.position)] = obj
+
+    def instructions(self):
+        color_costs = ""
+        order = ""
+        text = """<p>Thank you for participating in our experiment.  Here are the instructions:"""
+        text += """<p><p>Page 1/2: Basic Controls"""
+
+        text += """<br><img src='static/images/game_image.png' height='300'><br>"""
+        text += """<p>You are going to play a game live with another participant. 
+
+            <p>The game is played on a {g.columns} x {g.rows} grid, where each player occupies one block."""
+
+        if self.others_visible:
+            text += """  You and the other player will be marked by different colors (BLUE, YELLOW or ORANGE)."""
+        
+        else:
+            text += """  <b>However, you will not be able to see where the other player is on the grid.</b>"""
+
+        
+        text += """<p>You can move around the grid using the arrow keys.
+                <br><img src='static/images/keys.gif' height='60'><br>
+                You can collect items using the spacebar.
+                """
+        if self.player_overlap:
+            text += " More than one player may occupy a block at the same time."
+        
+      
+        text += """<p><p>Page 2/2: Game instructions"""
+        text += """<p>In this game, you and the other player are hunters!  
+            You can earn points by hunting the following animals."""
+
+        text += """<ul>
+                    <li>🐇 Hare (3 points)</li>
+                    <li>🦌 Stag (4 points)</li>
+                </ul>"""
+        
+        text += """You may only hunt once per round, so you must choose whether to hunt a hare or a stag: """
+
+        text += """<ul>
+                    <li>🐇 To hunt a hare (3 points), occupy its space and hit the spacebar. You will receive 3 points when the hare is caught.
+                    <br><img src='static/images/hare_collect.gif' height='300'><br>
+                    </li>
+                    <li>🦌 To hunt a stag (4 points): <b>both you and the other other player</b> must occupy the stag's space or be adjacent to the stag, 
+                    and one of you must hit the spacebar. Both players will receive 4 points when a stag is caught.
+                    <br><img src='static/images/stag_collect.gif' height='300'><br>
+                    </li>
+                </ul>"""
+
+        text += """<p>Animals do not disappear when you collect them."""
+        text += """<p>The game has 5 rounds, and a round ends after both players have hunted a hare or a stag.  
+        Remember: You cannot hunt both a hare and a stag in the same round, you must choose one or the other!"""
+
+        text += """<p><b>Your goal in this game is to get as many points as you can. </b>"""
+
+        text += """<p>You will receive <strong>$.05</strong> for each point
+                that you score at the end of the game.</p>"""
+
+        if self.show_chatroom:
+            text += """<p>A chatroom is available to send messages to the other
+                players."""
+            if self.pseudonyms:
+                text += """ Player names shown on the chat window are pseudonyms.
+                        <br><img src='static/images/chatroom.gif' height='150'>"""
+            text += "</p>"
+        return formatter.format(
+            text,
+            g=self,
+            order=order,
+            color_costs=color_costs,
+            color_list=", ".join(self.limited_player_color_names),
+        )
 
     def consume(self):
         """Players consume the non-interactive items"""
@@ -593,6 +770,10 @@ class Gridworld(object):
                 del self.item_locations[position]
                 # Update existence and count of item.
                 self.items_consumed.append(item)
+
+                #LINE EDITED ROUND LOGIC
+                # self.num_items_consumed += 1
+
                 self.items_updated = True
                 if item.respawn:
                     # respawn same type of item.
@@ -608,10 +789,36 @@ class Gridworld(object):
 
                 player.score += calories
                 consumed += 1
+        
+        #LINE EDITED ROUND LOGIC
+        self.update_team_score()
 
         if consumed and item.public_good:
             for player_to in self.players.values():
                 player_to.score += item.public_good * consumed
+
+    def update_team_score(self):
+        self.team_score = sum(p.score for p in self.players.values())
+
+    def cook(self):
+        """Players need to put self.num_cook items in the oven to make 1 new food. 
+        The oven takes cook_time seconds to finish."""
+        for player in self.players.values():
+            position = tuple(player.position)
+            if position in self.item_locations:
+                item = self.item_locations[position]
+                if item.item_id == "oven":
+                    self.items_cooking += 1
+                    if (self.items_cooking == self.num_cook) and not self.oven_in_use: 
+                        self.oven_in_use = True
+
+                        for elapsed_time in range(self.cook_time, 0, -1):
+                            self.oven_time_left = elapsed_time
+                            time.sleep(1)
+                
+                        self.items_cooked.append(item)
+                        self.oven_in_use = False
+                        self.items_cooking = 0
 
     def spawn_item(self, position=None, item_id=None):
         """Respawn an item for a single position"""
@@ -629,21 +836,27 @@ class Gridworld(object):
             position = self._find_empty_position(item_id)
 
         item_props = self.item_config[item_id]
+
         new_item = Item(
             id=(len(self.item_locations) + len(self.items_consumed)),
             position=position,
             item_config=item_props,
         )
+
         self.item_locations[tuple(position)] = new_item
         self.items_updated = True
         logger.warning(f"Spawning new item: {new_item}")
+
+        logger.warning(self.others_visible)
+
+        
         self.log_event(
             {
                 "type": "spawn item",
                 "position": position,
             }
         )
-
+        
     def items_changed(self, last_items):
         locations = self.item_locations
         if len(last_items) != len(locations):
@@ -656,30 +869,6 @@ class Gridworld(object):
             if found.id != item["id"] or found.maturity != item["maturity"]:
                 return True
         return False
-
-    def trigger_transitions(self, time=time.time):
-        now = time()
-        to_change = []
-        for position, item in self.item_locations.items():
-            item_type = self.item_config.get(item.item_id)
-            if not item_type:
-                continue
-            if "auto_transition_time" in item_type:
-                if now - item.creation_timestamp >= item_type["auto_transition_time"]:
-                    target = item_type.get("auto_transition_target")
-                    new_target_item = target and Item(
-                        id=item.id,
-                        position=position,
-                        item_config=self.item_config[target],
-                    )
-                    to_change.append((position, new_target_item))
-        if to_change:
-            self.items_updated = True
-        for position, new_target_item in to_change:
-            if new_target_item is None:
-                del self.item_locations[position]
-            else:
-                self.item_locations[position] = new_target_item
 
     def replenish_items(self):
         items_by_type = collections.defaultdict(list)
@@ -752,6 +941,21 @@ class Gridworld(object):
             ),
             **kwargs,
         )
+
+        #LINE EDITED BLANK -
+        item_props = self.item_config["blank"]
+
+        new_item = Item(
+            id=(len(self.item_locations) + len(self.items_consumed)),
+            item_config=item_props,
+        )
+
+        player.current_item = new_item
+
+        #LINE EDITED BLANK -
+
+
+
         self.players[id] = player
         self._start_if_ready()
         return player
@@ -1045,6 +1249,7 @@ class Player(object):
             "id": self.id,
             "position": self.position,
             "score": self.score,
+            "team_score": self.grid.team_score,
             "payoff": self.payoff,
             "color": self.color,
             "motion_auto": self.motion_auto,
@@ -1363,90 +1568,35 @@ class Game(object):
 
     def handle_item_transition(self, msg):
         player = self.grid.players[msg["player_id"]]
-        player_item = player.current_item
         position = tuple(msg["position"])
         location_item = self.grid.item_locations.get(position)
-        transition = None
-
-        actor_key = player_item and player_item.item_id
-        target_key = location_item and location_item.item_id
-        transition_key = (actor_key, target_key)
-        # If the target item has only 1 remaining use, then we try to find a
-        # `last_use` transition
-        if location_item and location_item.remaining_uses == 1:
-            last_trans_key = ("last",) + transition_key
-            transition = self.transition_config.get(last_trans_key)
-        # If we didn't find or need one, we look up the standard key
-        if transition is None:
-            transition = self.transition_config.get(transition_key)
-
-        required_actors = transition and transition.get("required_actors", 0)
-        neighbors = player.neighbors()
-        if (transition is None) or (
-            required_actors and len(neighbors) + 1 < required_actors
-        ):
-            error_msg = {
-                "type": "action_error",
-                "player_id": player.id,
-                "position": list(position),
-                "item": location_item and location_item.serialize(),
-                "player_item": player_item and player_item.serialize(),
-            }
-            self.publish(error_msg)
+        
+        if not location_item or location_item.item_id not in {"hare", "stag"}:
             return
-
-        # these values may be positive or negative, so we may add or remove uses
-        modify_actor_uses, modify_target_uses = transition.get("modify_uses", (0, 0))
-        if player_item and player_item.remaining_uses:
-            player_item.remaining_uses += modify_actor_uses
-        if location_item and location_item.remaining_uses:
-            location_item.remaining_uses += modify_target_uses
-
-        # An item that is replaced or has no remaining uses has been "consumed"
-        if player_item and (
-            (player_item.remaining_uses < 1) or transition["actor_end"] != actor_key
-        ):
-            self.grid.items_consumed.append(player_item)
-            player.current_item = None
-            self.grid.items_updated = True
-        if location_item and (
-            (location_item.remaining_uses < 1) or transition["target_end"] != target_key
-        ):
+        
+        transition = self.transition_config.get((player.current_item and player.current_item.item_id, location_item.item_id))
+        if not transition:
+            return
+        
+        required_actors = transition.get("required_actors", 0)
+        neighbors = player.neighbors()
+        if required_actors and len(neighbors) + 1 < required_actors:
+            return
+        
+        transition_calories = transition.get("calories", 0)
+        per_player = transition_calories // (len(neighbors) + 1)
+        for other_player in neighbors:
+            other_player.score += per_player
+        player.score += per_player + (transition_calories % (len(neighbors) + 1))
+        
+        if location_item.remaining_uses:
+            location_item.remaining_uses -= 1
+        if location_item.remaining_uses < 1:
             del self.grid.item_locations[position]
-            self.grid.items_consumed.append(location_item)
-            self.grid.items_updated = True
-
-        # The player's item type has changed
-        if transition["actor_end"] != actor_key:
-            if transition["actor_end"] is not None:
-                replacement_item_config = self.item_config.get(transition["actor_end"])
-                replacement_item = Item(
-                    id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                    item_config=replacement_item_config,
-                )
-            else:
-                replacement_item = None
-            player.current_item = replacement_item
-            self.grid.items_updated = True
-
-        # The location's item type has changed
-        if transition["target_end"] != target_key:
-            new_target_item = Item(
-                id=len(self.grid.item_locations) + len(self.grid.items_consumed),
-                position=position,
-                item_config=self.item_config[transition["target_end"]],
-            )
-            self.grid.item_locations[position] = new_target_item
-            self.grid.items_updated = True
-
-        # Possibly distribute calories to participating players
-        transition_calories = transition.get("calories")
-        if transition_calories:
-            per_player = transition_calories // (len(neighbors) + 1)
-            for other_player in neighbors:
-                other_player.score += per_player
-            player.score += per_player
-            player.score += transition_calories % (len(neighbors) + 1)
+            self.grid.num_items_consumed += 1
+        
+        self.grid.items_updated = True
+        self.grid.update_team_score()
 
     def handle_item_drop(self, msg):
         player = self.grid.players[msg["player_id"]]

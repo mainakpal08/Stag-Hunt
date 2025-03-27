@@ -1,0 +1,69 @@
+[Experiment Parameters]
+mode = debug
+auto_recruit = true
+recruiter = multi
+recruiters = bots: 1, hotair: 1
+network = FullyConnected
+block_size = 25
+columns = 25
+rows = 25
+window_rows = 25
+window_columns = 25
+use_identicons = true
+background_animation = true
+visibility = 10
+bot_policy = PartialObsGeneralizedProbabilisticBot
+
+[Game Parameters]
+max_participants = 1
+game_quorum = 2
+num_rounds = 2
+num_games = 2
+goal_items = 3
+player_overlap = true
+walls_density = 0
+time_per_round = 60
+game_over_cond = time
+hare_count_after_new_round = 5
+stag_count_after_new_round = 2
+lock_table_when_creating_participant = false
+
+[docker]
+docker_image_base_name = ghcr.io/dallinger/griduniverse
+
+[AWS]
+[You will have to set these values yourself,] 
+[they will be private so do no push them to any public locations]
+aws_access_key_id = xxx
+aws_secret_access_key = xxx
+aws_region =  us-east-1
+
+[HIT Configuration]
+keywords = Psychology, game, play
+lifetime = 24
+duration = 0.1
+approve_requirement = 95
+contact_email_on_error = lucasl@princeton.edu
+ad_group = Griduniverse
+organization_name = Princeton University
+browser_exclude_rule = MSIE, mobile, tablet
+
+[Prolific]
+title = Play an Online Game!
+description = In this study, you and another player will play as hunters in an online game.
+prolific_api_token = 65o_rMrdQVwguFDFrivHL6PzPGNWkrsRjrrsk_xssgC-GmcK4zj-hbL955cUNJ43DqSZWzDP0tqCcDitbBDUA7xM_CwukHd2Wqx5ndiLTL1mnFlwiT4xR6K3
+prolific_estimated_completion_minutes = 5
+prolific_recruitment_config = {"device_compatibility": ["desktop"], "eligibility_requirements": [{"_cls": "web.eligibility.models.SelectAnswerEligibilityRequirement", "attributes": [{"value": true, "index": 18}], "query": {"id": "54ac6ea9fdf99b2204feb899"}}]}
+base_payment = 2.40
+
+[Database Parameters]
+database_url = postgresql://postgres@localhost/dallinger
+database_size = standard-0
+
+[Server Parameters]
+dyno_type = standard-2x
+num_dynos_web = 1
+num_dynos_worker = 1
+host = 0.0.0.0
+clock_on = false
+logfile = -
