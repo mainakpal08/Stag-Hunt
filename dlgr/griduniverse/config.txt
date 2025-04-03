@@ -1,6 +1,6 @@
 [Experiment Parameters]
-mode = live
-auto_recruit = false
+mode = debug
+auto_recruit = true
 recruiter = multi
 recruiters = bots: 1, cli: 2
 network = FullyConnected
@@ -16,13 +16,13 @@ bot_policy = PartialObsGeneralizedProbabilisticBot
 
 [Game Parameters]
 max_participants = 3
-num_rounds = 3
+num_rounds = 1
 goal_items = 3
 num_cook = 2
 player_overlap = true
 walls_density = 0
 cook_time = 15
-time_per_round = 120
+time_per_round = 10
 game_over_cond = time
 hare_count_after_new_round = 5
 stag_count_after_new_round = 2

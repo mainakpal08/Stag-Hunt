@@ -1313,6 +1313,8 @@ class Griduniverse(Experiment):
         self.num_participants = self.config.get("max_participants", 3)
         self.num_recruits = self.config.get("num_recruits", 3)
         self.quorum = self.num_participants
+        # self.quorum = 10
+
         self.hare_count = self.config.get("hare_count_after_new_round", 2)
         self.stag_count = self.config.get("stag_count_after_new_round", 1)
     
@@ -1320,6 +1322,7 @@ class Griduniverse(Experiment):
         self.initial_recruitment_size = self.config.get(
             "num_recruits", self.num_participants
         )
+        self.num_participants = 10
         self.network_factory = self.config.get("network", "FullyConnected")
 
         game_config_file = os.path.join(os.path.dirname(__file__), GAME_CONFIG_FILE)

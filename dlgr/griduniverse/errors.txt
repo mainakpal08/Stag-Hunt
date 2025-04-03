@@ -1,0 +1,72 @@
+127.0.0.1 - - [02/Apr/2025 16:06:02] "POST /worker_complete HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2213, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2193, in wsgi_app
+    response = self.handle_exception(e)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2190, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1486, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1484, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1469, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/db.py", line 134, in wrapper
+    return func(*args, **kwargs)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/experiment_server/experiment_server.py", line 1735, in worker_complete
+    _worker_complete(participant_id)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/experiment_server/experiment_server.py", line 1772, in _worker_complete
+    status_and_action = participant.recruiter.on_task_completion()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/recruiters.py", line 191, in on_task_completion
+    raise NotImplementedError
+NotImplementedError
+
+
+
+
+2025-04-02 16:05:39,526 Going for 0 at (3, 18), moving: '\ue014'
+2025-04-02 16:05:40,033 [Job 8268b646-e685-4696-89a4-bb61360e69e7]: exception raised while executing (dallinger.recruiters.run_status_check)
+Traceback (most recent call last):
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/rq/worker.py", line 1428, in perform_job
+    rv = job.perform()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/rq/job.py", line 1278, in perform
+    self._result = self._execute()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/rq/job.py", line 1315, in _execute
+    result = self.func(*self.args, **self.kwargs)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/recruiters.py", line 74, in run_status_check
+    recruiter.verify_status_of(participants)
+AttributeError: 'NoneType' object has no attribute 'verify_status_of'
+
+2025-04-02 16:05:41,606 -------------------------------------------------------------
+2025-04-02 16:05:41,606 Iteration: 22
+
+
+
+
+
+>>>> ----- Received an RecruiterSubmissionComplete notification for assignment CWS4EX, participant 2
+>>>> ????? Bonus of 0.0 will NOT be paid to participant 2 as it is less than 0.01.
+>>>> ????? Attention checks passed.
+127.0.0.1 - - [02/Apr/2025 16:19:23] "POST /worker_complete HTTP/1.1" 200 -
+127.0.0.1 - - [02/Apr/2025 16:19:23] "GET /recruiter-exit?participant_id=2 HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2213, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2193, in wsgi_app
+    response = self.handle_exception(e)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 2190, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1486, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1484, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/flask/app.py", line 1469, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/experiment_server/utils.py", line 73, in new_func
+    resp = make_response(func(*args, **kwargs))
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/experiment_server/experiment_server.py", line 614, in recruiter_exit
+    return recruiter.exit_response(experiment=exp, participant=participant)
+  File "/home/bruno/Documentos/Updated_Python_Stag_Hunt/Stag-Hunt/venv/lib/python3.9/site-packages/dallinger/recruiters.py", line 161, in exit_response
+    raise NotImplementedError
+NotImplementedError
