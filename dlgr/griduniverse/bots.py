@@ -2033,6 +2033,70 @@ class StagFirstBot(HighPerformanceBaseGridUniverseBot):
 
         return Keys.SPACE
 
+class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
+    """A bot that collects hares until a player gets close to a stag."""
+
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.alpha = 4  # Distância mínima para que o bot se desloque para um stag quando um jogador se aproxima
+        self.collected_hares = set()
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def move_towards(self, current_position, target_position):
+        """Determines the direction to move toward the target."""
+        if target_position[0] > current_position[0]:
+            return Keys.DOWN
+        elif target_position[0] < current_position[0]:
+            return Keys.UP
+        elif target_position[1] > current_position[1]:
+            return Keys.RIGHT
+        elif target_position[1] < current_position[1]:
+            return Keys.LEFT
+        return Keys.SPACE
+
+    def get_next_key(self):
+        """Goes to hares until a player gets close to a stag (distance ≤ alpha)."""
+        if not self.animal_positions or not self.player_positions:
+            logger.warning("No animals or players found on the grid.")
+            return Keys.SPACE
+
+        closest_animal = None
+        min_distance = float('inf')
+
+        # Verificar se algum jogador está perto de um stag
+        for player_id, player_position in self.player_positions.items():
+            for animal_id, position in self.animal_positions:
+                if "stag" in animal_id.lower():
+                    distance_to_stag = self.manhattan_distance(player_position, position)
+                    if distance_to_stag <= self.alpha:
+                        # Se um jogador está perto de um stag, move para esse stag
+                        closest_animal = position
+                        break
+            if closest_animal:
+                break
+
+        # Se nenhum jogador está perto de um stag, vai em direção ao hare mais próximo
+        if not closest_animal:
+            for animal_id, position in self.animal_positions:
+                if "hare" in animal_id.lower():
+                    distance = self.manhattan_distance(self.my_position, position)
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_animal = position
+
+        # Se encontramos o animal (hare ou stag), mover em direção a ele
+        if closest_animal:
+            next_move = self.move_towards(self.my_position, closest_animal)
+            logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
+            return next_move
+
+        return Keys.SPACE
+
 
 
 
