@@ -12,7 +12,7 @@ window_columns = 20
 use_identicons = true
 background_animation = true
 visibility = 10
-bot_policy = HareFirstBot
+bot_policy = StagFirstBot
 
 [Game Parameters]
 max_participants = 2

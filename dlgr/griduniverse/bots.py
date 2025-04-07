@@ -1977,6 +1977,61 @@ class HareFirstBot(HighPerformanceBaseGridUniverseBot):
         return Keys.SPACE
 
 
+class StagFirstBot(HighPerformanceBaseGridUniverseBot):
+    """A bot that collects all stags first, then goes for the hares."""
+
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.collected_stags = set()
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def move_towards(self, current_position, target_position):
+        """Determines the direction to move toward the target."""
+        if target_position[0] > current_position[0]:
+            return Keys.DOWN
+        elif target_position[0] < current_position[0]:
+            return Keys.UP
+        elif target_position[1] > current_position[1]:
+            return Keys.RIGHT
+        elif target_position[1] < current_position[1]:
+            return Keys.LEFT
+        return Keys.SPACE
+
+    def get_next_key(self):
+        """Collects all stags first, then goes to the hares."""
+        if not self.animal_positions:
+            logger.warning("No animals found on the grid.")
+            return Keys.SPACE
+
+        closest_animal = None
+        min_distance = float('inf')
+
+        for animal_id, position in self.animal_positions:
+            if "stag" in animal_id.lower():
+                distance = self.manhattan_distance(self.my_position, position)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_animal = position
+
+        if closest_animal is None:
+            for animal_id, position in self.animal_positions:
+                if "hare" in animal_id.lower():
+                    distance = self.manhattan_distance(self.my_position, position)
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_animal = position
+
+        if closest_animal:
+            next_move = self.move_towards(self.my_position, closest_animal)
+            logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
+            return next_move
+
+        return Keys.SPACE
 
 
 
