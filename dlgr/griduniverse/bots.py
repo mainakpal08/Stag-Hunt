@@ -1795,52 +1795,6 @@ class BayesianStagHunterBot(HighPerformanceBaseGridUniverseBot):
             logger.info(f"Moving towards {hare_target}.")
             return self.get_direction_to_target(hare_2go)
 
-    
-
-
-class StalkerBot(HighPerformanceBaseGridUniverseBot):
-    """A bot that follows the closest player"""
-
-    #: The Selenium keys that this bot will choose between
-    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.id = str(uuid.uuid4())
-        logger.info("Initializing bot...")
-    
-    def client_info(self):
-        return {"id": self.id, "type": "bot"}
-
-    def get_furthest_player_position(self):
-        """Find the furthest player's position."""
-        my_position = self.my_position  # The bot's current position
-        furthest_player = None
-        furthest_distance = -float("inf")  # Usar "-inf" para comparar a maior distância
-
-        logger.info(f"My position: {my_position}")
-        logger.info(f"Player positions: {self.player_positions}")
-        bot_id = self.get_player_id()
-        logger.info(f"Bot ID:{bot_id}")
-
-        for player_id, position in self.player_positions.items():
-            if str(player_id) == str(bot_id): #trings para ignorar o bot
-                logger.info(f"Skipping self (Bot ID: {self.id}) at position {position}")
-                continue  # Skip the bot itself
-
-            # Calculate Manhattan distance
-            distance = abs(my_position[0] - position[0]) + abs(my_position[1] - position[1])
-            logger.info(f"Checking player {player_id} at position {position} with distance {distance}")
-
-            if distance > furthest_distance:  # Verificar maior distância
-                furthest_distance = distance
-                furthest_player = position
-                logger.info(f"New furthest player: {player_id} at position {position} with distance {distance}")
-
-        logger.info(f"Furthest player determined: {furthest_player}")
-        return furthest_player
-
-
 
 
     def get_next_key(self):
@@ -1934,16 +1888,19 @@ class HareFirstBot(HighPerformanceBaseGridUniverseBot):
         return {"id": self.id, "type": "bot"}
 
     def move_towards(self, current_position, target_position):
-        """Determines the direction to move toward the target."""
+        """Determines the direction to move toward the target with variation."""
+        options = []
+        
         if target_position[0] > current_position[0]:
-            return Keys.DOWN
-        elif target_position[0] < current_position[0]:
-            return Keys.UP
-        elif target_position[1] > current_position[1]:
-            return Keys.RIGHT
-        elif target_position[1] < current_position[1]:
-            return Keys.LEFT
-        return Keys.SPACE
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
 
     def get_next_key(self):
         """Collects all hares first, then goes to the stag."""
@@ -1991,16 +1948,19 @@ class StagFirstBot(HighPerformanceBaseGridUniverseBot):
         return {"id": self.id, "type": "bot"}
 
     def move_towards(self, current_position, target_position):
-        """Determines the direction to move toward the target."""
+        """Determines the direction to move toward the target with variation."""
+        options = []
+        
         if target_position[0] > current_position[0]:
-            return Keys.DOWN
-        elif target_position[0] < current_position[0]:
-            return Keys.UP
-        elif target_position[1] > current_position[1]:
-            return Keys.RIGHT
-        elif target_position[1] < current_position[1]:
-            return Keys.LEFT
-        return Keys.SPACE
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
 
     def get_next_key(self):
         """Collects all stags first, then goes to the hares."""
@@ -2041,23 +2001,26 @@ class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.alpha = 4  # Distância mínima para que o bot se desloque para um stag quando um jogador se aproxima
+        self.alpha = 4 # Distance threshold for considering a player close to a stag
         self.collected_hares = set()
 
     def client_info(self):
         return {"id": self.id, "type": "bot"}
 
     def move_towards(self, current_position, target_position):
-        """Determines the direction to move toward the target."""
+        """Determines the direction to move toward the target with variation."""
+        options = []
+        
         if target_position[0] > current_position[0]:
-            return Keys.DOWN
-        elif target_position[0] < current_position[0]:
-            return Keys.UP
-        elif target_position[1] > current_position[1]:
-            return Keys.RIGHT
-        elif target_position[1] < current_position[1]:
-            return Keys.LEFT
-        return Keys.SPACE
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
 
     def get_next_key(self):
         """Goes to hares until a player gets close to a stag (distance ≤ alpha)."""
@@ -2068,19 +2031,16 @@ class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
         closest_animal = None
         min_distance = float('inf')
 
-        # Verificar se algum jogador está perto de um stag
         for player_id, player_position in self.player_positions.items():
             for animal_id, position in self.animal_positions:
                 if "stag" in animal_id.lower():
                     distance_to_stag = self.manhattan_distance(player_position, position)
                     if distance_to_stag <= self.alpha:
-                        # Se um jogador está perto de um stag, move para esse stag
                         closest_animal = position
                         break
             if closest_animal:
                 break
 
-        # Se nenhum jogador está perto de um stag, vai em direção ao hare mais próximo
         if not closest_animal:
             for animal_id, position in self.animal_positions:
                 if "hare" in animal_id.lower():
@@ -2089,13 +2049,71 @@ class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
                         min_distance = distance
                         closest_animal = position
 
-        # Se encontramos o animal (hare ou stag), mover em direção a ele
         if closest_animal:
             next_move = self.move_towards(self.my_position, closest_animal)
             logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
             return next_move
 
         return Keys.SPACE
+
+class StalkerBot(HighPerformanceBaseGridUniverseBot):
+    """A bot that follows the closest player, and collects animals if standing on them."""
+
+    VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+
+    def client_info(self):
+        return {"id": self.id, "type": "bot"}
+
+    def get_closest_player_position(self):
+        my_position = self.my_position
+        closest_player = None
+        min_distance = float("inf")
+
+        bot_id = self.get_player_id()
+
+        for player_id, position in self.player_positions.items():
+            if str(player_id) == str(bot_id):
+                continue
+
+            distance = abs(my_position[0] - position[0]) + abs(my_position[1] - position[1])
+            if distance < min_distance:
+                min_distance = distance
+                closest_player = position
+
+        return closest_player
+
+    def move_towards(self, current_position, target_position):
+
+        options = []
+        
+        if target_position[0] > current_position[0]:
+            options.append(Keys.DOWN)
+        if target_position[0] < current_position[0]:
+            options.append(Keys.UP)
+        if target_position[1] > current_position[1]:
+            options.append(Keys.RIGHT)
+        if target_position[1] < current_position[1]:
+            options.append(Keys.LEFT)
+        
+        return random.choice(options) if options else Keys.SPACE
+
+    def get_next_key(self):
+
+        for _, animal_position in self.animal_positions:
+            if animal_position == self.my_position:
+                return Keys.SPACE
+
+        closest_player_position = self.get_closest_player_position()
+
+        if closest_player_position:
+            return self.move_towards(self.my_position, closest_player_position)
+
+        return Keys.SPACE
+
 
 
 
