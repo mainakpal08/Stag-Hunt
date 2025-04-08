@@ -41,9 +41,10 @@ setup_args = dict(
     packages=find_packages("."),
     package_dir={"": "."},
     namespace_packages=["dlgr"],
-    include_package_data=True,
+    include_package_data=True,    
     install_requires=[
-        "dallinger",
+        "dallinger @ git+https://github.com/mainakpal08/Dallinger.git@mainak",
+        "rq<1.10",
         "numpy",
         "faker",
         "PyYAML",
