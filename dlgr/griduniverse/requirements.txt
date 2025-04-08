@@ -1,4 +1,5 @@
-dallinger
+dallinger @ git+https://github.com/mainakpal08/Dallinger.git@mainak
 numpy
 faker
 PyYAML
+rq<1.10
