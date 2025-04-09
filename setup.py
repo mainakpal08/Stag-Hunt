@@ -43,8 +43,7 @@ setup_args = dict(
     namespace_packages=["dlgr"],
     include_package_data=True,    
     install_requires=[
-        "dallinger @ git+https://github.com/mainakpal08/Dallinger.git@mainak",
-        "rq<1.10",
+        "dallinger @ git+https://github.com/mainakpal08/Dallinger.git@mainakv2",
         "numpy",
         "faker",
         "PyYAML",
