@@ -30,14 +30,11 @@
         By clicking the following URL link, you will be taken to the experiment,
         including complete instructions and an informed consent agreement.
     </p>
-    <script>
-        function openwindow() {
-            popup = window.open('{{ server_location }}/consent?recruiter={{ recruiter }}&hit_id={{ hitid }}&assignment_id={{ assignmentid }}&worker_id={{ workerid }}&workerId={{ workerid }}','Popup','toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=no,width='+1024+',height='+768+'');
-          }
-    </script>
     <p><b>Warning</b>: Please disable pop-up blockers before continuing.</p>
-    <button type="button" id="begin-button" class="button btn-primary" onClick="openwindow();">
-      Begin Experiment
-    </button>
+    <a href="{{ server_location }}/prolific_info?prolific_id={{ prolific_id }}">
+        <button type="button" id="begin-button" class="button btn-primary">
+            Next Page
+        </button>
+    </a>
 {% endif %}
 {% endblock %}
