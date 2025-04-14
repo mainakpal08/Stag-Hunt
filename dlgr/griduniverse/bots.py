@@ -2001,16 +2001,45 @@ class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.alpha = 4 # Distance threshold for considering a player close to a stag
+        self.alpha = 4  # Distance threshold for considering a player close to a stag
         self.collected_hares = set()
+        self.visibility = 1
+        self.game_config_loaded = False
 
     def client_info(self):
         return {"id": self.id, "type": "bot"}
 
+    def load_game_config(self):
+        """Load game configuration from the config file."""
+        config = get_config()
+        self.visibility = config.get("visibility", 1)
+        self.game_config_loaded = True
+
+    def get_gaussian_detect_prob(self, d, sigma):
+        """Gaussian detection probability based on distance and visibility."""
+        return np.exp(- (d ** 2) / (2 * sigma ** 2))
+
+    def get_observation(self):
+        """Probabilistically observe other players based on visibility."""
+        robot_position = self.my_position
+        player_positions = {}
+        for player_id, pos in self.player_positions.items():
+            if player_id == 1:
+                continue
+            d = self.manhattan_distance(robot_position, pos)
+            p_detect = self.get_gaussian_detect_prob(d, self.visibility)
+            if np.random.rand() < p_detect:
+                player_positions[player_id] = pos
+            else:
+                player_positions[player_id] = None
+
+        logger.info(f"Visible players: {player_positions}")
+        return robot_position, player_positions
+
     def move_towards(self, current_position, target_position):
         """Determines the direction to move toward the target with variation."""
         options = []
-        
+
         if target_position[0] > current_position[0]:
             options.append(Keys.DOWN)
         if target_position[0] < current_position[0]:
@@ -2019,51 +2048,59 @@ class HareUntilPlayerNearStagBot(HighPerformanceBaseGridUniverseBot):
             options.append(Keys.RIGHT)
         if target_position[1] < current_position[1]:
             options.append(Keys.LEFT)
-        
+
         return random.choice(options) if options else Keys.SPACE
 
     def get_next_key(self):
         """Goes to hares until a player gets close to a stag (distance ≤ alpha)."""
+        if not self.game_config_loaded:
+            self.load_game_config()
+
         if not self.animal_positions or not self.player_positions:
             logger.warning("No animals or players found on the grid.")
             return Keys.SPACE
 
-        closest_animal = None
-        min_distance = float('inf')
+        my_position, visible_players = self.get_observation()
 
-        for player_id, player_position in self.player_positions.items():
+        for player_id, player_position in visible_players.items():
+            if player_position is None:
+                continue
             for animal_id, position in self.animal_positions:
                 if "stag" in animal_id.lower():
                     distance_to_stag = self.manhattan_distance(player_position, position)
                     if distance_to_stag <= self.alpha:
-                        closest_animal = position
-                        break
-            if closest_animal:
-                break
+                        logger.info(f"Player {player_id} is close to stag at {position}, going there.")
+                        return self.move_towards(my_position, position)
 
-        if not closest_animal:
-            for animal_id, position in self.animal_positions:
-                if "hare" in animal_id.lower():
-                    distance = self.manhattan_distance(self.my_position, position)
-                    if distance < min_distance:
-                        min_distance = distance
-                        closest_animal = position
+        closest_hare = None
+        min_distance = float('inf')
 
-        if closest_animal:
-            next_move = self.move_towards(self.my_position, closest_animal)
-            logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
-            return next_move
+        for animal_id, position in self.animal_positions:
+            if "hare" in animal_id.lower():
+                distance = self.manhattan_distance(my_position, position)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_hare = position
 
+        if closest_hare:
+            logger.info(f"No players near stags. Going to hare at {closest_hare}.")
+            return self.move_towards(my_position, closest_hare)
+
+        logger.info("No visible players or hares found, staying still.")
         return Keys.SPACE
 
+
 class StalkerBot(HighPerformanceBaseGridUniverseBot):
-    """A bot that follows the closest player, and collects animals if standing on them."""
+    """A bot that follows visible players, hunts hares if no players are seen, and goes for stags if no hares remain."""
 
     VALID_KEYS = [Keys.UP, Keys.DOWN, Keys.RIGHT, Keys.LEFT, Keys.SPACE]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
+        self.game_config_loaded = False
+        self.visibility = 1
+
 
     def client_info(self):
         return {"id": self.id, "type": "bot"}
@@ -2100,19 +2137,66 @@ class StalkerBot(HighPerformanceBaseGridUniverseBot):
             options.append(Keys.LEFT)
         
         return random.choice(options) if options else Keys.SPACE
+    
+    def load_game_config(self):
+        """Load game configuration from the config file."""
+        config = get_config()
+        self.visibility = config.get("visibility")
+        self.game_config_loaded = True
 
+    
+    def get_gaussian_detect_prob(self, d, sigma):
+        return np.exp(- (d**2) / (2 * sigma**2))
+
+    def get_observation(self):
+        robot_position = self.my_position
+        player_positions = {}
+        for player_id, pos in self.player_positions.items():
+            if player_id == 1:
+                continue
+            d = self.manhattan_distance(robot_position, pos)
+            p_detect = self.get_gaussian_detect_prob(d, self.visibility)
+            if np.random.rand() < p_detect:
+                player_positions[player_id] = pos
+            else:
+                player_positions[player_id] = None
+        
+        logger.info(f"Visible players: {player_positions}")
+        return robot_position, player_positions
+    
     def get_next_key(self):
+        if not self.game_config_loaded:
+            self.load_game_config()
 
         for _, animal_position in self.animal_positions:
             if animal_position == self.my_position:
+                logger.info("Collecting animal.")
                 return Keys.SPACE
 
-        closest_player_position = self.get_closest_player_position()
+        my_position, visible_players = self.get_observation()
 
-        if closest_player_position:
-            return self.move_towards(self.my_position, closest_player_position)
+        visible_positions = [pos for pos in visible_players.values() if pos is not None]
 
+        if visible_positions:
+            closest_player = min(visible_positions, key=lambda pos: self.manhattan_distance(my_position, pos))
+            logger.info(f"Going towards closest visible player at {closest_player}.")
+            return self.move_towards(my_position, closest_player)
+        else:
+            hare_positions = [pos for animal_type, pos in self.animal_positions if animal_type == "hare"]
+            if hare_positions:
+                closest_hare = min(hare_positions, key=lambda pos: self.manhattan_distance(my_position, pos))
+                logger.info(f"No players visible, going towards closest hare at {closest_hare}.")
+                return self.move_towards(my_position, closest_hare)
+            else:
+                stag_positions = [pos for animal_type, pos in self.animal_positions if animal_type == "stag"]
+                if stag_positions:
+                    closest_stag = min(stag_positions, key=lambda pos: self.manhattan_distance(my_position, pos))
+                    logger.info(f"No players or hares visible, going towards closest stag at {closest_stag}.")
+                    return self.move_towards(my_position, closest_stag)
+
+        logger.info("No action possible, staying still.")
         return Keys.SPACE
+
 
 
 
