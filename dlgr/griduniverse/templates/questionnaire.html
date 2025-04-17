@@ -1,46 +1,162 @@
 {% extends "layout.html" %}
 
 {% block scripts %}
-  <script src="/static/scripts/dist/questionnaire.js" type="text/javascript"></script>
-  <script type="text/javascript">
-    function check_answers() {
-      var leach_complete, leach_question;
-      if ($("input[name='leach_1']").length) {
-        leach_complete = true;
-        for (leach_question=1; leach_question<21; leach_question++) {
-            if ($("input[name='leach_" + leach_question + "']:checked").length == 0) {
-                leach_complete = false;
-                break;
-            }
-        }
-        if (!leach_complete) { return false; }
-      }
+<script src="/static/scripts/dist/questionnaire.js" type="text/javascript"></script>
+<script type="text/javascript">
+  function check_answers() {
+    const botOrNot = document.getElementById("bot_or_not").value;
+    const strategy = document.getElementById("strategy").value;
+    const age = document.getElementById("age").value;
+    const gender = document.getElementById("gender").value;
+    const otherGenderInput = document.getElementById("other_gender_input");
+    const otherGenderValid = gender !== "other" || (otherGenderInput && otherGenderInput.value.trim() !== "");
 
-      $('#submit-questionnaire').prop('disabled', false);
-      return true;
+    const engagementWithPlayers = document.getElementById("engage_others").value;
+    const rulesUnderstanding = document.getElementById("rules_understanding").value;
+
+    const submitButton = document.getElementById("submit-questionnaire");
+    if (
+      botOrNot && strategy && age && gender &&
+      otherGenderValid &&
+      engagementWithPlayers !== "0" &&
+      rulesUnderstanding !== "0"
+    ) {
+      submitButton.disabled = false;
+    } else {
+      submitButton.disabled = true;
     }
-  </script>
+  }
+
+  function handleGenderChange() {
+    const gender = document.getElementById("gender").value;
+    const otherInputDiv = document.getElementById("other-gender-div");
+    if (gender === "other") {
+      otherInputDiv.style.display = "block";
+    } else {
+      otherInputDiv.style.display = "none";
+    }
+    check_answers();
+  }
+</script>
 {% endblock %}
 
 {% block container %}
 <h1>Finished.</h1>
 <hr>
 <p>Thanks for contributing to our research. You will be eligible for full payment once you answer the following questions:</p>
+
 <form>
-    <div class="row question">
-        <div class="column column-75">
-            <p>What is your Prolific ID?</p>
-        </div>
-        <div class="column column-25">
-            <input type="text" id = "workerID" name="workerID" onChange="check_answers()">
-        </div>
+  <div class="row question">
+    <div class="column column-75">
+      <p>Were the other players bots or humans?</p>
     </div>
-   
-</form>
-<hr>
-<div>
-    <button id="submit-questionnaire" type="button" disabled="true" class="button">
-        Continue
+    <div class="column column-25">
+      <select id="bot_or_not" name="bot_or_not" onchange="check_answers()">
+        <option value=""></option>
+        <option value="human">Human</option>
+        <option value="bot">Bot</option>
+        <option value="mixed">Mixed</option>
+        <option value="not_sure">Not sure</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-75">
+      <p>What strategy do you think players prioritized? (Stag or Hare)</p>
+    </div>
+    <div class="column column-25">
+      <select id="strategy" name="strategy" onchange="check_answers()">
+        <option value=""></option>
+        <option value="stag">Stag</option>
+        <option value="hare">Hare</option>
+        <option value="both">Both equally</option>
+        <option value="not_sure">Not sure</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-75">
+      <p>Age:</p>
+    </div>
+    <div class="column column-25">
+      <input type="number" id="age" name="age" min="1" max="120" oninput="check_answers()">
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-75">
+      <p>Gender:</p>
+    </div>
+    <div class="column column-25">
+      <select id="gender" name="gender" onchange="handleGenderChange()">
+        <option value=""></option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="non_binary">Non-binary</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row question" id="other-gender-div" style="display: none;">
+    <div class="column column-75">
+      <p>Please specify:</p>
+    </div>
+    <div class="column column-25">
+      <input type="text" id="other_gender_input" name="other_gender_input" oninput="check_answers()">
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-75">
+      <p>How easy was it to engage with the other players? (1 = not easy, 7 = very easy)</p>
+    </div>
+    <div class="column column-25">
+      <select id="engage_others" name="engage_others" onchange="check_answers()">
+        <option value="0"></option>
+        <option value="7">7</option>
+        <option value="6">6</option>
+        <option value="5">5</option>
+        <option value="4">4</option>
+        <option value="3">3</option>
+        <option value="2">2</option>
+        <option value="1">1</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-75">
+      <p>How easy was it to understand the rules and dynamics of the game? (1 = not easy, 7 = very easy)</p>
+    </div>
+    <div class="column column-25">
+      <select id="rules_understanding" name="rules_understanding" onchange="check_answers()">
+        <option value="0"></option>
+        <option value="7">7</option>
+        <option value="6">6</option>
+        <option value="5">5</option>
+        <option value="4">4</option>
+        <option value="3">3</option>
+        <option value="2">2</option>
+        <option value="1">1</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row question">
+    <div class="column column-100">
+      <p>Any feedback or comments? Feel free to share anything:</p>
+      <textarea name="feedback" rows="6" cols="100" placeholder="Your thoughts, suggestions, or anything else..."></textarea>
+    </div>
+  </div>
+
+  <hr>
+  <div>
+    <button id="submit-questionnaire" type="button" disabled class="button">
+      Continue
     </button>
-</div>
+  </div>
+</form>
 {% endblock %}

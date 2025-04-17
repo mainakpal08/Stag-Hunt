@@ -1281,6 +1281,11 @@ def serve_grid():
     config = get_config()
     return flask.render_template("grid.html", app_id=config.get("id"))
 
+@extra_routes.route("/prolific_id")
+def info():
+    config = get_config()
+    return flask.render_template("prolific_id.html", mode=config.get("mode"))
+
 
 class Griduniverse(Experiment):
     """Define the structure of the experiment."""
