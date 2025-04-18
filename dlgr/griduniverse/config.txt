@@ -15,7 +15,8 @@ visibility = 10
 bot_policy = HareUntilPlayerNearStagBot
 
 [Game Parameters]
-max_participants = 2
+max_participants = 200
+num_recruits = 2
 num_rounds = 1
 goal_items = 3
 num_cook = 2

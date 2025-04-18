@@ -26,7 +26,7 @@
     {% if env['SENTRY_DSN'] %}
     <script src="https://cdn.ravenjs.com/3.17.0/raven.min.js" crossorigin="anonymous"></script>
     <script type="application/javascript">
-        Raven.config('{{ env['SENTRY_DSN'][0:40] + env['SENTRY_DSN'][73:] }}').install()
+        Raven.config("{{ env['SENTRY_DSN'][0:40] + env['SENTRY_DSN'][73:] }}").install()
     </script>
     {% endif %}
 

@@ -192,7 +192,7 @@ class Gridworld(object):
         self.prolific_assignment_id = ""
 
         # Players
-        self.num_players = kwargs.get("max_participants", 3)
+        self.num_players = kwargs.get("num_recruits", 3)
 
         # Rounds
         self.num_rounds = kwargs.get("num_rounds", 1)
@@ -373,6 +373,28 @@ class Gridworld(object):
         ) = self._get_probablity_func_for_config(
             self.player_config.get("probability_distribution", "")
         )
+
+    def reset(self):
+        """Reset the grid for a new game."""
+        self.players = {}
+        self.item_locations = {}
+        self.items_consumed = []
+        self.items_cooked = []
+        self.items_cooking = 0
+        self.oven_in_use = False
+        self.oven_time_left = 0
+        self.round = 0
+        self.stop_game()
+        self.team_score = 0
+        self.num_items_consumed = 0
+        self.wall_locations = {}
+        self.total_items = 0
+        self.chat_message_history = []
+        
+        # Add these lines to ensure complete reset
+        #self.game_started = False
+        self.walls_updated = True
+        self.items_updated = True
 
     def _get_probablity_func_for_config(self, probability_distribution):
         probability_function_args = []
@@ -597,11 +619,22 @@ class Gridworld(object):
     def _start_if_ready(self):
         # Don't start unless we have a least one player
         if self.players and not self.game_started:
-            self.start_timestamp = time.time()
+            self.start_game()  # Use the method instead of direct assignment
 
     @property
     def game_started(self):
+        """Read-only property that checks if the game has started based on timestamp."""
         return self.start_timestamp is not None
+    
+    def start_game(self):
+        """Explicitly start the game by setting the start timestamp."""
+        if not self.game_started:
+            self.start_timestamp = time.time()
+        return self.game_started
+    
+    def stop_game(self):
+        """Explicitly stop the game by clearing the start timestamp."""
+        self.start_timestamp = None
 
     @property
     def game_over(self):
@@ -1317,7 +1350,7 @@ class Griduniverse(Experiment):
 
         self.num_participants = self.config.get("max_participants", 3)
         self.num_recruits = self.config.get("num_recruits", 3)
-        self.quorum = self.num_participants
+        self.quorum = self.num_recruits
         # self.quorum = 10
 
         self.hare_count = self.config.get("hare_count_after_new_round", 2)
@@ -1325,9 +1358,9 @@ class Griduniverse(Experiment):
     
 
         self.initial_recruitment_size = self.config.get(
-            "num_recruits", self.num_participants
+            "num_recruits", self.quorum
         )
-        self.num_participants = 10
+        #self.num_participants = 10
         self.network_factory = self.config.get("network", "FullyConnected")
 
         game_config_file = os.path.join(os.path.dirname(__file__), GAME_CONFIG_FILE)
@@ -1623,7 +1656,8 @@ class Griduniverse(Experiment):
         if message is not None:
             message["server_time"] = time.time()
             self.dispatch((message))
-            if "player_id" in message:
+            # Only record event if not a connect message
+            if "player_id" in message and message.get("type") != "connect":
                 self.record_event(message, message["player_id"])
 
     def parse_message(self, raw_message):
@@ -1642,6 +1676,9 @@ class Griduniverse(Experiment):
         if player_id == "spectator":
             return
         elif player_id:
+            print(self.node_by_player_id)
+            print(details)
+            print(player_id)
             node_id = self.node_by_player_id[player_id]
             node = session.query(dallinger.models.Node).get(node_id)
         else:
@@ -1650,7 +1687,7 @@ class Griduniverse(Experiment):
         try:
             info = Event(origin=node, details=details)
         except ValueError:
-            logger.info(
+            print(
                 "Tried to record an event after node#{} failure: {}".format(
                     node.id, details
                 )
@@ -1691,17 +1728,18 @@ class Griduniverse(Experiment):
         client_count = len(self.grid.players)
         logger.info("Grid num players: {}".format(self.grid.num_players))
         if client_count < self.grid.num_players:
+            print("handle_connect AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             participant = self.session.query(dallinger.models.Participant).get(
                 player_id
             )
             network = self.get_network_for_participant(participant)
             if network:
-                logger.info("Found an open network. Adding participant node...")
+                print("Found an open network. Adding participant node...")
                 node = self.create_node(participant, network)
                 self.node_by_player_id[player_id] = node.id
                 self.session.add(node)
                 self.session.commit()
-                logger.info("Spawning player on the grid...")
+                print("Spawning player on the grid...")
                 # We use the current node id modulo the number of colours
                 # to pick the user's colour. This ensures that players are
                 # allocated to colours uniformly.
@@ -1712,8 +1750,9 @@ class Griduniverse(Experiment):
                     ],
                     recruiter_id=participant.recruiter_id,
                 )
+                self.record_event(msg, player_id)
             else:
-                logger.info("No free network found for player {}".format(player_id))
+                print("No free network found for player {}".format(player_id))
 
     def handle_disconnect(self, msg):
         logger.info("Client {} has disconnected.".format(msg["player_id"]))
@@ -1767,7 +1806,11 @@ class Griduniverse(Experiment):
         self.record_event(message, message["player_id"])
 
     def handle_move(self, msg):
-        player = self.grid.players[msg["player_id"]]
+        player_id = msg["player_id"]
+        player = self.grid.players.get(player_id)
+        if player is None:
+            logger.warning(f"handle_move: Player {player_id} not found. Ignoring move.")
+            return
         try:
             msgs = player.move(msg["move"], timestamp=msg.get("timestamp"))
         except IllegalMove:
@@ -1898,7 +1941,12 @@ class Griduniverse(Experiment):
         self.grid.items_updated = True
    
     def handle_item_transition(self, msg):
-        player = self.grid.players[msg["player_id"]]
+        player_id = msg["player_id"]
+        if player_id not in self.grid.players:
+            logger.warning(f"Received item_transition for unknown player_id: {player_id}")
+            return  # Ignore or optionally send an error message back
+
+        player = self.grid.players[player_id]
         position = tuple(msg["position"])
         location_item = self.grid.item_locations.get(position)
         
@@ -2023,106 +2071,123 @@ class Griduniverse(Experiment):
                 }
 
             self.publish(message)
-            if self.grid.game_over:
-                return
+            # if self.grid.game_over:
+            #     return
 
     def game_loop(self):
         """Update the world state."""
+        print("GAAAAAAMMMMMMMMMMME LOOOOOOOOOOOPPPPPPPPP")
         gevent.sleep(0.1)
-        if not self.config.get("replay", False):
-            self.grid.build_labyrinth()
-            logger.info("Spawning items")
-            for item_type in self.item_config.values():
-                for i in range(item_type["item_count"]):
-                    if (i % 250) == 0:
-                        gevent.sleep(0.00001)
-                    self.grid.spawn_item(item_id=item_type["item_id"])
-                    self.grid.total_items += 1
-
-        while not self.grid.game_started:
-            gevent.sleep(0.01)
-
-        previous_second_timestamp = self.grid.start_timestamp
-        count = 0
-
-        while not self.grid.game_over:
-            # Record grid state to database
-            state_data = self.grid.serialize(
-                include_walls=self.grid.walls_updated,
-                include_items=self.grid.items_updated,
+        while True:
+        # Create a new grid instance for each game
+            self.grid = Gridworld(
+                log_event=self.record_event,
+                item_config=self.item_config,
+                transition_config=self.transition_config,
+                player_config=self.player_config,
+                **self.config.as_dict(),
             )
-            state = self.environment.update(json.dumps(state_data), details=state_data)
-            self.socket_session.add(state)
-            self.socket_session.commit()
-            count += 1
-            self.grid.walls_updated = False
-            self.grid.items_updated = False
-            gevent.sleep(0.010)
+            if not self.config.get("replay", False):
+                self.grid.build_labyrinth()
+                print("Spawning items")
+                for item_type in self.item_config.values():
+                    for i in range(int(item_type["item_count"])):
+                        if (i % 250) == 0:
+                            gevent.sleep(0.00001)
+                        self.grid.spawn_item(item_id=item_type["item_id"])
+                        self.grid.total_items += 1
 
-            # TODO: Most of this code belongs in Gridworld; we're just looking
-            # at properties of that class and then telling it to do things based
-            # on the values.
+            while not self.grid.game_started:
+                gevent.sleep(0.01)
 
-            # Log item updates every hundred rounds to capture maturity changes
-            if self.grid.includes_maturing_items and (count % 100) == 0:
-                self.grid.items_updated = True
-            now = time.time()
+            previous_second_timestamp = self.grid.start_timestamp
+            count = 0
+            print("GAMMMMMMMMMMEEEEEE OVERRRRR: {}".format(self.grid.game_over))
 
-            # Update motion.
-            if self.grid.motion_auto:
-                for player in self.grid.players.values():
-                    player.move(player.motion_direction, tremble_rate=0)
+            while not self.grid.game_over:
+                # Record grid state to database
+                state_data = self.grid.serialize(
+                    include_walls=self.grid.walls_updated,
+                    include_items=self.grid.items_updated,
+                )
+                state = self.environment.update(json.dumps(state_data), details=state_data)
+                self.socket_session.add(state)
+                self.socket_session.commit()
+                count += 1
+                self.grid.walls_updated = False
+                self.grid.items_updated = False
+                gevent.sleep(0.010)
 
-            # Consume the food.
-            if self.grid.consumption_active:
-                self.grid.consume()
+                # TODO: Most of this code belongs in Gridworld; we're just looking
+                # at properties of that class and then telling it to do things based
+                # on the values.
 
-            # Spread through contagion.
-            if self.grid.contagion > 0:
-                self.grid.spread_contagion()
+                # Log item updates every hundred rounds to capture maturity changes
+                if self.grid.includes_maturing_items and (count % 100) == 0:
+                    self.grid.items_updated = True
+                now = time.time()
 
-            # Trigger time-based events.
-            if (now - previous_second_timestamp) > 1.000:
-                # Grow or shrink the item stores.
-                self.grid.replenish_items()
-
-                abundances = {}
-                for player in self.grid.players.values():
-                    # Apply tax.
-                    player.score = max(player.score - self.grid.tax, 0)
-                    if player.color not in abundances:
-                        abundances[player.color] = 0
-                    abundances[player.color] += 1
-
-                # Apply frequency-dependent payoff.
-                if self.grid.frequency_dependence:
+                # Update motion.
+                if self.grid.motion_auto:
                     for player in self.grid.players.values():
-                        relative_frequency = (
-                            1.0 * abundances[player.color] / len(self.grid.players)
-                        )
-                        payoff = (
-                            fermi(
-                                beta=self.grid.frequency_dependence,
-                                p1=relative_frequency,
-                                p2=0.5,
+                        player.move(player.motion_direction, tremble_rate=0)
+
+                # Consume the food.
+                if self.grid.consumption_active:
+                    self.grid.consume()
+
+                # Spread through contagion.
+                if self.grid.contagion > 0:
+                    self.grid.spread_contagion()
+
+                # Trigger time-based events.
+                if (now - previous_second_timestamp) > 1.000:
+                    # Grow or shrink the item stores.
+                    self.grid.replenish_items()
+
+                    abundances = {}
+                    for player in self.grid.players.values():
+                        # Apply tax.
+                        player.score = max(player.score - self.grid.tax, 0)
+                        if player.color not in abundances:
+                            abundances[player.color] = 0
+                        abundances[player.color] += 1
+
+                    # Apply frequency-dependent payoff.
+                    if self.grid.frequency_dependence:
+                        for player in self.grid.players.values():
+                            relative_frequency = (
+                                1.0 * abundances[player.color] / len(self.grid.players)
                             )
-                            * self.grid.frequency_dependent_payoff_rate
-                        )
+                            payoff = (
+                                fermi(
+                                    beta=self.grid.frequency_dependence,
+                                    p1=relative_frequency,
+                                    p2=0.5,
+                                )
+                                * self.grid.frequency_dependent_payoff_rate
+                            )
 
-                        player.score = max(player.score + payoff, 0)
+                            player.score = max(player.score + payoff, 0)
 
-                previous_second_timestamp = now
+                    previous_second_timestamp = now
 
-            self.grid.compute_payoffs()
-            game_round = self.grid.round
-            self.grid.check_round_completion()
-            if self.grid.round != game_round and not self.grid.game_over:
-                self.publish({"type": "new_round", "round": self.grid.round})
-                self.record_event({"type": "new_round", "round": self.grid.round})
+                self.grid.compute_payoffs()
+                game_round = self.grid.round
+                self.grid.check_round_completion()
+                if self.grid.round != game_round and not self.grid.game_over:
+                    self.publish({"type": "new_round", "round": self.grid.round})
+                    self.record_event({"type": "new_round", "round": self.grid.round})
 
-        self.publish({"type": "stop"})
-        self.socket_session.commit()
-        return
+            self.publish({"type": "stop"})
+            self.socket_session.commit()
+            self.grid.reset()
+            gevent.sleep(2.0)
+            print("THIS IS CALLEDDDDDDDDDDDDDDDDDDDDDDDD")
+            self.recruiter().open_recruitment(n=self.initial_recruitment_size)
+            print("RECRUITMENT OPENEDDDDDDDDDDDDDDDDDDDDDD")
+            self.configure()
+            
 
     def player_feedback(self, data):
         engagement = int(json.loads(data.questions.list[-1][-1])["engagement"])
