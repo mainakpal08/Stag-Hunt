@@ -1988,7 +1988,7 @@ class StagFirstBot(HighPerformanceBaseGridUniverseBot):
 
         if closest_animal:
             next_move = self.move_towards(self.my_position, closest_animal)
-            logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
+            # logger.info(f"Moving towards closest animal at {closest_animal}, direction: {repr(next_move)}")
             return next_move
 
         return Keys.SPACE

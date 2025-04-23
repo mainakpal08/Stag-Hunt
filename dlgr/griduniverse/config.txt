@@ -2,7 +2,7 @@
 mode = debug
 auto_recruit = true
 recruiter = multi
-recruiters = bots: 1, cli: 1
+recruiters = bots: 1, hotair: 1
 network = FullyConnected
 block_size = 25
 columns = 20
@@ -12,7 +12,7 @@ window_columns = 20
 use_identicons = true
 background_animation = true
 visibility = 10
-bot_policy = HareUntilPlayerNearStagBot
+bot_policy = StagFirstBot
 
 [Game Parameters]
 max_participants = 200
@@ -23,7 +23,7 @@ num_cook = 2
 player_overlap = true
 walls_density = 0
 cook_time = 15
-time_per_round = 5
+time_per_round = 10
 game_over_cond = time
 hare_count_after_new_round = 5
 stag_count_after_new_round = 2
