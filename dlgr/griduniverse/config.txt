@@ -17,7 +17,7 @@ bot_policy = StagFirstBot
 [Game Parameters]
 max_participants = 200
 num_recruits = 2
-num_rounds = 1
+num_rounds = 2
 goal_items = 3
 num_cook = 2
 player_overlap = true

@@ -323,6 +323,8 @@ class Gridworld(object):
         self.hare_count = kwargs.get("hare_count_after_new_round", 0)
         self.stag_count = kwargs.get("stag_count_after_new_round", 0)
 
+        self.game_running = False
+
         self.round = 0
 
         if self.contagion_hierarchy:
@@ -657,6 +659,8 @@ class Gridworld(object):
             "chat_visible": self.show_chatroom,
             #LINE EDITED CONDITIONS
             "others_visible": self.others_visible,
+            #BRUNO EDITED
+            "game_running": self.game_running,
         }
 
         if include_walls:
@@ -2048,6 +2052,7 @@ class Griduniverse(Experiment):
                     "grid": json.dumps(grid_state),
                     "count": count,
                     "remaining_time": self.grid.remaining_round_time,
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
             elif self.grid.game_over_cond == "foraging":
@@ -2056,6 +2061,7 @@ class Griduniverse(Experiment):
                     "grid": json.dumps(grid_state),
                     "count": count,
                     "remaining_time": self.grid.goal_items - len(self.grid.items_consumed),
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
 
@@ -2067,6 +2073,7 @@ class Griduniverse(Experiment):
                     "remaining_time": self.grid.goal_items - len(self.grid.items_cooked),
                     "oven_time_left": self.grid.oven_time_left,
                     "oven_in_use": self.grid.oven_in_use,
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
 
@@ -2219,6 +2226,8 @@ class Griduniverse(Experiment):
         print("--------- FIRST LOOP ----------")
         gevent.sleep(0.1)
 
+        self.grid.game_running = True
+
         while True:
             print("--------- NEW WORLD CREATED ----------")
             self.grid = Gridworld(
@@ -2228,10 +2237,13 @@ class Griduniverse(Experiment):
                 player_config=self.player_config,
                 **self.config.as_dict(),
             )
+
+            # self.grid.game_running = True
             
             print("--------- WAITING PLAYERS ----------")
             while len(self.grid.players) < self.config.get("num_recruits", 3):
-                gevent.sleep(0.1)
+                gevent.sleep(0.2)
+
 
             
             print("--------- SPAWNING ITEMS ----------")
@@ -2255,7 +2267,6 @@ class Griduniverse(Experiment):
 
             while not self.grid.game_over:
 
-                print("--------- GAME LOOP ----------")
                 
                 state_data = self.grid.serialize(
                     include_walls=self.grid.walls_updated,
@@ -2332,31 +2343,35 @@ class Griduniverse(Experiment):
                     self.record_event({"type": "new_round", "round": self.grid.round})
 
             print("--------- END GAME LOOP ----------")
-            gevent.sleep(2.0)
 
+            
 
             self.publish({"type": "stop"})
             print("--------- PUBLISH ----------")
-            gevent.sleep(2.0)
 
 
             self.socket_session.commit()
             print("--------- COMMIT ----------")
-            gevent.sleep(2.0)
 
 
             self.grid.reset()
             print("--------- RESET ----------")
+
+            self.participants_are_ready()
             
-            gevent.sleep(2.0)
 
             self.recruiter().open_recruitment(n=self.initial_recruitment_size)
             print("--------- RECRUITMENT ----------")
-            gevent.sleep(2.0)
+
+
             
             self.configure()
             print("--------- CONFIGURE ----------")
             gevent.sleep(2.0)
+
+            
+            
+
 
 
     def player_feedback(self, data):
@@ -2664,4 +2679,24 @@ class Griduniverse(Experiment):
 
         return finished_count >= self.initial_recruitment_size
 
+    def participants_are_ready(self):
+        """Does not consider the experiment as ready until all participants have completed the questionnaire, 
+        which indicates that the players are approved."""
+        while True:
+            approved_count = (
+                self.session.query(dallinger.models.Participant)
+                .filter(dallinger.models.Participant.status == "approved")
+                .with_entities(func.count(dallinger.models.Participant.id))
+                .scalar()
+            )
 
+            total_count = (
+                self.session.query(dallinger.models.Participant)
+                .with_entities(func.count(dallinger.models.Participant.id))
+                .scalar()
+            )
+
+            if approved_count == total_count:
+                return True
+
+            gevent.sleep(0.5)
