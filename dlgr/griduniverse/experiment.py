@@ -323,6 +323,8 @@ class Gridworld(object):
         self.hare_count = kwargs.get("hare_count_after_new_round", 0)
         self.stag_count = kwargs.get("stag_count_after_new_round", 0)
 
+        self.game_running = False
+
         self.round = 0
 
         if self.contagion_hierarchy:
@@ -657,6 +659,8 @@ class Gridworld(object):
             "chat_visible": self.show_chatroom,
             #LINE EDITED CONDITIONS
             "others_visible": self.others_visible,
+            #BRUNO EDITED
+            "game_running": self.game_running,
         }
 
         if include_walls:
@@ -2048,6 +2052,7 @@ class Griduniverse(Experiment):
                     "grid": json.dumps(grid_state),
                     "count": count,
                     "remaining_time": self.grid.remaining_round_time,
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
             elif self.grid.game_over_cond == "foraging":
@@ -2056,6 +2061,7 @@ class Griduniverse(Experiment):
                     "grid": json.dumps(grid_state),
                     "count": count,
                     "remaining_time": self.grid.goal_items - len(self.grid.items_consumed),
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
 
@@ -2067,6 +2073,7 @@ class Griduniverse(Experiment):
                     "remaining_time": self.grid.goal_items - len(self.grid.items_cooked),
                     "oven_time_left": self.grid.oven_time_left,
                     "oven_in_use": self.grid.oven_in_use,
+                    "game_running": self.grid.game_running,
                     "round": self.grid.round,
                 }
 
@@ -2074,12 +2081,155 @@ class Griduniverse(Experiment):
             # if self.grid.game_over:
             #     return
 
+    # def game_loop(self):
+    #     """Update the world state."""
+    #     print("--------- PRIMEIRO LOOP ----------")
+    #     gevent.sleep(0.1)
+    #     while True:
+            
+    #         print("--------- CRIOU MUNDO NOVO ----------")
+    #         self.grid = Gridworld(
+    #             log_event=self.record_event,
+    #             item_config=self.item_config,
+    #             transition_config=self.transition_config,
+    #             player_config=self.player_config,
+    #             **self.config.as_dict(),
+    #         )
+
+    #         print("--------- VAI SPAWNAR ITEMS ----------")
+    #         if not self.config.get("replay", False):
+    #             self.grid.build_labyrinth()
+    #             print("Spawning items")
+    #             for item_type in self.item_config.values():
+    #                 for i in range(int(item_type["item_count"])):
+    #                     if (i % 250) == 0:
+    #                         gevent.sleep(0.00001)
+    #                     self.grid.spawn_item(item_id=item_type["item_id"])
+    #                     self.grid.total_items += 1
+            
+
+
+    #         while not self.grid.game_started:
+    #             gevent.sleep(0.01)
+
+    #         previous_second_timestamp = self.grid.start_timestamp
+    #         count = 0
+
+    #         while not self.grid.game_over:
+                
+    #             print("--------- LOOP DO JOGO ----------")
+                
+    #             state_data = self.grid.serialize(
+    #                 include_walls=self.grid.walls_updated,
+    #                 include_items=self.grid.items_updated,
+    #             )
+                
+    #             state = self.environment.update(json.dumps(state_data), details=state_data)
+    #             self.socket_session.add(state)
+    #             self.socket_session.commit()
+    #             count += 1
+    #             self.grid.walls_updated = False
+    #             self.grid.items_updated = False
+    #             gevent.sleep(0.010)
+
+    #             # TODO: Most of this code belongs in Gridworld; we're just looking
+    #             # at properties of that class and then telling it to do things based
+    #             # on the values.
+
+    #             # Log item updates every hundred rounds to capture maturity changes
+    #             if self.grid.includes_maturing_items and (count % 100) == 0:
+    #                 self.grid.items_updated = True
+    #             now = time.time()
+
+    #             # Update motion.
+    #             if self.grid.motion_auto:
+    #                 for player in self.grid.players.values():
+    #                     player.move(player.motion_direction, tremble_rate=0)
+
+    #             # Consume the food.
+    #             if self.grid.consumption_active:
+    #                 self.grid.consume()
+
+    #             # Spread through contagion.
+    #             if self.grid.contagion > 0:
+    #                 self.grid.spread_contagion()
+
+    #             # Trigger time-based events.
+    #             if (now - previous_second_timestamp) > 1.000:
+    #                 # Grow or shrink the item stores.
+    #                 self.grid.replenish_items()
+
+    #                 abundances = {}
+    #                 for player in self.grid.players.values():
+    #                     # Apply tax.
+    #                     player.score = max(player.score - self.grid.tax, 0)
+    #                     if player.color not in abundances:
+    #                         abundances[player.color] = 0
+    #                     abundances[player.color] += 1
+
+    #                 # Apply frequency-dependent payoff.
+    #                 if self.grid.frequency_dependence:
+    #                     for player in self.grid.players.values():
+    #                         relative_frequency = (
+    #                             1.0 * abundances[player.color] / len(self.grid.players)
+    #                         )
+    #                         payoff = (
+    #                             fermi(
+    #                                 beta=self.grid.frequency_dependence,
+    #                                 p1=relative_frequency,
+    #                                 p2=0.5,
+    #                             )
+    #                             * self.grid.frequency_dependent_payoff_rate
+    #                         )
+
+    #                         player.score = max(player.score + payoff, 0)
+
+    #                 previous_second_timestamp = now
+
+    #             self.grid.compute_payoffs()
+    #             game_round = self.grid.round
+    #             self.grid.check_round_completion()
+    #             if self.grid.round != game_round and not self.grid.game_over:
+    #                 self.publish({"type": "new_round", "round": self.grid.round})
+    #                 self.record_event({"type": "new_round", "round": self.grid.round})
+
+    #         print("--------- FIM DO JOGO ----------")
+    #         gevent.sleep(5.0)
+
+
+    #         self.publish({"type": "stop"})
+    #         print("--------- PUBLISH ----------")
+    #         gevent.sleep(5.0)
+
+
+    #         self.socket_session.commit()
+    #         print("--------- COMMIT ----------")
+    #         gevent.sleep(5.0)
+
+
+    #         self.grid.reset()
+    #         print("--------- RESET ----------")
+            
+    #         gevent.sleep(5.0)
+
+    #         self.recruiter().open_recruitment(n=self.initial_recruitment_size)
+    #         print("--------- RECRUITMENT ----------")
+    #         gevent.sleep(5.0)
+            
+    #         self.configure()
+    #         print("--------- CONFIGURE ----------")
+    #         gevent.sleep(5.0)
+    
+    
     def game_loop(self):
         """Update the world state."""
-        print("GAAAAAAMMMMMMMMMMME LOOOOOOOOOOOPPPPPPPPP")
+        print("--------- FIRST LOOP ----------")
         gevent.sleep(0.1)
+
+        self.grid.game_running = True
+
         while True:
-        # Create a new grid instance for each game
+            print("--------- NEW WORLD CREATED ----------")
             self.grid = Gridworld(
                 log_event=self.record_event,
                 item_config=self.item_config,
@@ -2087,6 +2237,16 @@ class Griduniverse(Experiment):
                 player_config=self.player_config,
                 **self.config.as_dict(),
             )
+
+            # self.grid.game_running = True
+            
+            print("--------- WAITING PLAYERS ----------")
+            while len(self.grid.players) < self.config.get("num_recruits", 3):
+                gevent.sleep(0.2)
+
+
+            
+            print("--------- SPAWNING ITEMS ----------")
             if not self.config.get("replay", False):
                 self.grid.build_labyrinth()
                 print("Spawning items")
@@ -2097,19 +2257,22 @@ class Griduniverse(Experiment):
                         self.grid.spawn_item(item_id=item_type["item_id"])
                         self.grid.total_items += 1
 
+            print("--------- WAITING START ----------")
             while not self.grid.game_started:
                 gevent.sleep(0.01)
 
+            print("--------- BEGIN GAME LOOP ----------")
             previous_second_timestamp = self.grid.start_timestamp
             count = 0
-            print("GAMMMMMMMMMMEEEEEE OVERRRRR: {}".format(self.grid.game_over))
 
             while not self.grid.game_over:
-                # Record grid state to database
+
+                
                 state_data = self.grid.serialize(
                     include_walls=self.grid.walls_updated,
                     include_items=self.grid.items_updated,
                 )
+                
                 state = self.environment.update(json.dumps(state_data), details=state_data)
                 self.socket_session.add(state)
                 self.socket_session.commit()
@@ -2179,15 +2342,37 @@ class Griduniverse(Experiment):
                     self.publish({"type": "new_round", "round": self.grid.round})
                     self.record_event({"type": "new_round", "round": self.grid.round})
 
-            self.publish({"type": "stop"})
-            self.socket_session.commit()
-            self.grid.reset()
-            gevent.sleep(2.0)
-            print("THIS IS CALLEDDDDDDDDDDDDDDDDDDDDDDDD")
-            self.recruiter().open_recruitment(n=self.initial_recruitment_size)
-            print("RECRUITMENT OPENEDDDDDDDDDDDDDDDDDDDDDD")
-            self.configure()
+            print("--------- END GAME LOOP ----------")
+
             
+
+            self.publish({"type": "stop"})
+            print("--------- PUBLISH ----------")
+
+
+            self.socket_session.commit()
+            print("--------- COMMIT ----------")
+
+
+            self.grid.reset()
+            print("--------- RESET ----------")
+
+            self.participants_are_ready()
+            
+
+            self.recruiter().open_recruitment(n=self.initial_recruitment_size)
+            print("--------- RECRUITMENT ----------")
+
+
+            
+            self.configure()
+            print("--------- CONFIGURE ----------")
+            gevent.sleep(2.0)
+
+            
+            
+
+
 
     def player_feedback(self, data):
         engagement = int(json.loads(data.questions.list[-1][-1])["engagement"])
@@ -2494,4 +2679,24 @@ class Griduniverse(Experiment):
 
         return finished_count >= self.initial_recruitment_size
 
+    def participants_are_ready(self):
+        """Does not consider the experiment as ready until all participants have completed the questionnaire, 
+        which indicates that the players are approved."""
+        while True:
+            approved_count = (
+                self.session.query(dallinger.models.Participant)
+                .filter(dallinger.models.Participant.status == "approved")
+                .with_entities(func.count(dallinger.models.Participant.id))
+                .scalar()
+            )
 
+            total_count = (
+                self.session.query(dallinger.models.Participant)
+                .with_entities(func.count(dallinger.models.Participant.id))
+                .scalar()
+            )
+
+            if approved_count == total_count:
+                return True
+
+            gevent.sleep(0.5)
